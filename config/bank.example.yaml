@@ -1,0 +1,23 @@
+catalog_path: config/bank_catalog.json
+max_selected_databases: 1
+min_route_score: 0.03
+max_rows: 100
+max_sql_iterations: 5
+
+databases:
+  - id: bank
+    name: Retail Bank
+    description: >-
+      Retail banking database. Customers with names, emails, cities, credit
+      scores, and sign-up dates. Accounts with balances, account types, and
+      open dates. Cards with card types and expiration dates. Loans with loan
+      amounts, interest rates, and start dates. Transactions with amounts,
+      dates, and the merchant involved. Merchants and their cities. Branches
+      with managers, cities, and countries.
+    uri: sqlite:////Users/kuldeepdhaka/Downloads/banking_dataset_kaggle/data/database/bank_sqlite.db
+    dialect: sqlite
+    include_tables: []
+    blocked_tables: []
+    blocked_columns: []
+    auto_block_sensitive_columns: true
+    sample_rows: 2

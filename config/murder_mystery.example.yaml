@@ -1,0 +1,29 @@
+catalog_path: config/murder_mystery_catalog.json
+max_selected_databases: 1
+min_route_score: 0.03
+max_rows: 100
+max_sql_iterations: 3
+
+databases:
+  - id: mystery_example
+    name: SQL Mystery Example
+    description: Example SQLite database for testing generic database learning, routing, and grounded SQL question answering.
+    uri: sqlite:////Users/kuldeepdhaka/Downloads/sql-murder-mystery.db
+    dialect: sqlite
+    include_tables: []
+    blocked_tables:
+      - solution
+    blocked_columns: []
+    auto_block_sensitive_columns: true
+    sample_rows: 2
+
+  - id: chinook
+    name: Chinook Music Store
+    description: Sample SQLite music store database with artists, albums, tracks, playlists, genres, media types, customers, employees, invoices, and invoice line sales.
+    uri: sqlite:////Users/kuldeepdhaka/Downloads/Chinook_Sqlite.sqlite
+    dialect: sqlite
+    include_tables: []
+    blocked_tables: []
+    blocked_columns: []
+    auto_block_sensitive_columns: true
+    sample_rows: 2

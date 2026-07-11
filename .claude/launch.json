@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "db-agent-ui",
+      "runtimeExecutable": ".venv/bin/db-agent-ui",
+      "runtimeArgs": [],
+      "env": { "DB_AGENT_UI_PORT": "8123" },
+      "port": 8123
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+[project]
+name = "multi-db-grounded-agent"
+version = "0.1.0"
+description = "LangGraph-based agentic system for grounded Q&A across multiple databases."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "langchain>=0.3.0",
+  "langchain-google-genai>=3.0.0",
+  "langchain-openai>=0.2.0",
+  "langgraph>=0.2.0",
+  "pydantic>=2.8.0",
+  "python-dotenv>=1.0.0",
+  "pyyaml>=6.0.0",
+  "sqlalchemy>=2.0.0",
+  "sqlglot>=25.0.0",
+  "uvicorn>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.6.0",
+]
+
+[project.scripts]
+db-agent = "db_agentic_system.cli:main"
+db-agent-ui = "db_agentic_system.web:main"
+
+[build-system]
+requires = ["setuptools>=70.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+db_agentic_system = ["static/*"]
+
+[tool.ruff]
+line-length = 100

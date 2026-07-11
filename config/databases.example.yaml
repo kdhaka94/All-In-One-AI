@@ -1,0 +1,32 @@
+databases:
+  - id: customers
+    name: Customer Database
+    description: Customer profiles, account status, location, sign-up dates, support ownership.
+    uri_env: DATABASE_URL_CUSTOMERS
+    dialect: sqlite
+    include_tables:
+      - customers
+    blocked_tables: []
+    blocked_columns:
+      - password
+      - password_hash
+      - ssn
+      - credit_card
+    auto_block_sensitive_columns: true
+    sample_rows: 3
+
+  - id: orders
+    name: Orders Database
+    description: Orders, invoices, payments, refunds, product purchases, revenue facts.
+    uri_env: DATABASE_URL_ORDERS
+    dialect: sqlite
+    include_tables:
+      - orders
+      - order_items
+      - products
+    blocked_tables: []
+    blocked_columns:
+      - card_token
+      - payment_secret
+    auto_block_sensitive_columns: true
+    sample_rows: 3
