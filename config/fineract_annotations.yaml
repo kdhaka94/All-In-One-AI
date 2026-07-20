@@ -27,6 +27,26 @@ tables:
       transaction_type_enum: Type of loan transaction (see r_enum_value).
       amount: Transaction amount.
       transaction_date: When the transaction occurred.
+  m_loan_arrears_aging:
+    description: >-
+      Loan arrears / overdue / past-due amounts, one row per loan in arrears. A loan is
+      overdue (in arrears, past due, delinquent) exactly when it has a row here — use this
+      table for those questions, NOT principal_outstanding_derived on m_loan.
+    columns:
+      loan_id: The overdue loan (join to m_loan.id).
+      principal_overdue_derived: Past-due (overdue) principal.
+      interest_overdue_derived: Past-due (overdue) interest.
+      total_overdue_derived: Total overdue amount (principal + interest + fees + penalties).
+      overdue_since_date_derived: Date the loan first became overdue.
+  m_loan_repayment_schedule:
+    description: >-
+      Per-installment repayment schedule for each loan (duedate, principal/interest amounts,
+      and completed_derived). An installment is past due when duedate < today and
+      completed_derived is false.
+    columns:
+      loan_id: The loan this installment belongs to.
+      duedate: Date the installment is due.
+      completed_derived: Whether the installment has been fully paid.
   m_savings_product:
     description: Savings product definitions (interest, posting periods, currency).
   m_savings_account:
