@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from db_agentic_system.catalog import DatabaseProfile, TableProfile
 from db_agentic_system.router import Embedder, cosine_similarity
 
-_VECTOR_CACHE: dict[tuple[str, str], tuple[list[str], list[list[float]]]] = {}
+_VECTOR_CACHE: dict[tuple[int, str, str], tuple[list[str], list[list[float]]]] = {}
 
 
 def _table_text(table: TableProfile) -> str:
@@ -64,7 +64,7 @@ class TableSelector:
 
     def _table_vectors(self, profile: DatabaseProfile) -> tuple[list[str], list[list[float]]]:
         assert self.embedder is not None
-        key = (profile.id, profile.learned_at)
+        key = (id(self.embedder), profile.id, profile.learned_at)
         cached = _VECTOR_CACHE.get(key)
         current_names = [table.name for table in profile.tables]
         if cached is not None and cached[0] == current_names:

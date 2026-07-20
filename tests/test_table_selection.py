@@ -1,4 +1,9 @@
-from db_agentic_system.catalog import ColumnProfile, DatabaseProfile, ForeignKeyProfile, TableProfile
+from db_agentic_system.catalog import (
+    ColumnProfile,
+    DatabaseProfile,
+    ForeignKeyProfile,
+    TableProfile,
+)
 from db_agentic_system.table_selection import TableSelector
 
 
@@ -57,3 +62,14 @@ def test_lexical_fallback_without_embedder() -> None:
     selector = TableSelector(max_tables=1)  # no embedder → lexical token overlap
     selected = selector.select("office", _profile())
     assert "m_office" in selected
+
+
+def test_cache_is_embedder_aware() -> None:
+    from db_agentic_system import table_selection
+
+    table_selection._VECTOR_CACHE.clear()
+    profile = _profile()  # fixed id + learned_at shared by both selectors
+    loan_selector = TableSelector(max_tables=1, embedder=FakeEmbedder("loan"))
+    office_selector = TableSelector(max_tables=1, embedder=FakeEmbedder("office"))
+    assert "m_loan" in loan_selector.select("show me loans", profile)
+    assert "m_office" in office_selector.select("show me offices", profile)
