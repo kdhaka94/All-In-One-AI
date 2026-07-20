@@ -73,3 +73,23 @@ def test_cache_is_embedder_aware() -> None:
     office_selector = TableSelector(max_tables=1, embedder=FakeEmbedder("office"))
     assert "m_loan" in loan_selector.select("show me loans", profile)
     assert "m_office" in office_selector.select("show me offices", profile)
+
+
+def test_lexical_ranks_by_words_inside_identifiers_and_plurals() -> None:
+    # Domain words live inside underscore identifiers; the query uses plurals.
+    # m_office is FIRST, so with the old whole-identifier tokenizer both score 0
+    # and top-1 would wrongly return m_office. Splitting on "_" + singularizing
+    # lets m_loan match "outstanding"/"principal"/"loan".
+    profile = DatabaseProfile(
+        id="x", name="X", description="Bank.", dialect="postgres",
+        learned_at="2026-07-21T00:00:00+00:00",
+        tables=[
+            TableProfile(name="m_office", columns=[ColumnProfile(name="name", type="TEXT")]),
+            TableProfile(
+                name="m_loan",
+                columns=[ColumnProfile(name="principal_outstanding_derived", type="DECIMAL")],
+            ),
+        ],
+    )
+    selector = TableSelector(max_tables=1)  # lexical (no embedder)
+    assert selector.select("total outstanding principal for loans", profile) == ["m_loan"]

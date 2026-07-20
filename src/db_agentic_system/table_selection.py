@@ -18,7 +18,15 @@ def _table_text(table: TableProfile) -> str:
 
 
 def _tokenize(text: str) -> set[str]:
-    return set(re.findall(r"[a-zA-Z0-9_]+", text.lower()))
+    # Split on non-alphanumerics INCLUDING underscores, so identifiers like
+    # `loan_status_id` and `principal_outstanding_derived` contribute their domain
+    # words. Add a singular form for simple plurals so "loans" matches "loan".
+    tokens: set[str] = set()
+    for word in re.findall(r"[a-z0-9]+", text.lower()):
+        tokens.add(word)
+        if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+            tokens.add(word[:-1])
+    return tokens
 
 
 @dataclass
