@@ -145,6 +145,26 @@ db-agent index --config config/murder_mystery.example.yaml --output config/murde
 db-agent compare --config config/murder_mystery.example.yaml --catalog config/murder_mystery_catalog.json "Who was murdered?"
 ```
 
+## Example: Apache Fineract (full core-banking schema)
+
+[config/fineract.example.yaml](config/fineract.example.yaml) points the agent, **read-only**, at a live [Apache Fineract](https://fineract.apache.org/) core-banking database — the full ~285-table production schema. It exercises three capabilities the toy databases don't:
+
+- **Full-schema table selection.** `include_tables: []` exposes every table, and `max_selected_tables: 25` narrows to the tables relevant to each question before SQL generation, so the model never sees all 285 tables at once. For a schema this large, `table_selection_embeddings: false` ranks tables lexically (table names + annotations carry the domain words) to avoid embedding every table per query.
+- **A semantic annotation layer.** [config/fineract_annotations.yaml](config/fineract_annotations.yaml) is a hand-editable overlay of table/column descriptions applied at catalog load — edit it and restart the UI, no re-index needed. An optional `db-agent index --annotate` pass fills descriptions for the remaining tables with the LLM.
+- **Deterministic enum decoding.** Fineract stores integer status codes (e.g. `m_loan.loan_status_id`); indexing reads Fineract's own `r_enum_value` table and attaches real labels (`300 = Active`, `600 = Closed`, …) so the agent filters correctly.
+
+Bring up the stack, seed data, create a read-only role, and index — see [fineract/README.md](fineract/README.md) for the full runbook:
+
+```bash
+docker compose -f fineract/docker-compose.yml up -d          # Fineract + Postgres (host 5433)
+# wait for https://localhost:8443/fineract-provider/actuator/health to report UP
+pip install -e ".[seed]" && python fineract/seed_fineract.py  # clients, loans, savings, transactions
+docker compose -f fineract/docker-compose.yml exec -T db psql -U postgres -f - < fineract/create-readonly-role.sql
+db-agent index --config config/fineract.example.yaml --output config/fineract_catalog.json
+```
+
+Then set `DATABASE_URL_FINERACT` in `.env` (see `.env.example`) and pick **"Fineract Core Banking · Learned catalog"** in the Web UI. The agent connects as the SELECT-only `agent_ro` role; the heavy Fineract Java app is only needed for seeding — day-to-day queries need just the Postgres container.
+
 ## Web UI
 
 Start the local UI:

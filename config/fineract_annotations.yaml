@@ -1,0 +1,48 @@
+# Human-authored descriptions override AI-generated ones. Cover the core banking tables;
+# edit freely and restart the UI (no re-index needed).
+tables:
+  m_office:
+    description: Branch/office hierarchy. parent_id links to the parent office.
+  m_staff:
+    description: Employees; is_loan_officer marks loan officers assignable to clients/loans.
+  m_client:
+    description: A customer (individual). office_id is their branch; status_enum is lifecycle state.
+    columns:
+      status_enum: Client lifecycle status (see r_enum_value).
+      activation_date: Date the client became active.
+  m_product_loan:
+    description: Loan product definitions (terms, interest, currency).
+  m_loan:
+    description: A loan account held by a client. loan_status_id is its lifecycle status.
+    columns:
+      loan_status_id: Loan lifecycle status (see r_enum_value).
+      principal_amount: Approved principal.
+      principal_disbursed_derived: Total principal disbursed.
+      principal_outstanding_derived: Principal still owed.
+      client_id: The borrowing client.
+      product_id: The loan product used.
+  m_loan_transaction:
+    description: Ledger of loan events — disbursements, repayments, waivers.
+    columns:
+      transaction_type_enum: Type of loan transaction (see r_enum_value).
+      amount: Transaction amount.
+      transaction_date: When the transaction occurred.
+  m_savings_product:
+    description: Savings product definitions (interest, posting periods, currency).
+  m_savings_account:
+    description: A savings account held by a client. account_balance_derived is the current balance.
+    columns:
+      status_enum: Savings account lifecycle status (see r_enum_value).
+      account_balance_derived: Current savings balance.
+      client_id: The account holder.
+  m_savings_account_transaction:
+    description: Ledger of savings events — deposits, withdrawals, interest postings.
+    columns:
+      transaction_type_enum: Type of savings transaction (see r_enum_value).
+      amount: Transaction amount.
+  m_payment_detail:
+    description: Payment metadata (payment type, receipt/cheque numbers) linked to transactions.
+  m_currency:
+    description: Currencies enabled on the platform.
+  m_charge:
+    description: Fees/charges configurable against loan and savings products.

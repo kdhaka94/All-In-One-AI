@@ -17,6 +17,8 @@ class ColumnProfile(BaseModel):
     type: str
     nullable: bool | None = None
     primary_key: bool = False
+    description: str | None = None
+    enum_values: dict[str, str] | None = None
 
 
 class ForeignKeyProfile(BaseModel):
@@ -27,6 +29,7 @@ class ForeignKeyProfile(BaseModel):
 
 class TableProfile(BaseModel):
     name: str
+    description: str | None = None
     columns: list[ColumnProfile] = Field(default_factory=list)
     foreign_keys: list[ForeignKeyProfile] = Field(default_factory=list)
     sample_rows: list[dict[str, Any]] = Field(default_factory=list)
@@ -54,10 +57,13 @@ class DatabaseCatalog(BaseModel):
 
 
 def build_catalog(config: AgentConfig) -> DatabaseCatalog:
+    from db_agentic_system.enum_enrichment import enrich_enums
+
     profiles = []
     for db_config in config.databases:
         engine = create_engine(db_config.resolved_uri)
-        profiles.append(profile_database(db_config, engine))
+        profile = profile_database(db_config, engine)
+        profiles.append(enrich_enums(profile, engine))
     return DatabaseCatalog(databases=profiles)
 
 
@@ -142,7 +148,8 @@ def catalog_router_text(profile: DatabaseProfile) -> str:
     table_lines = []
     for table in profile.tables:
         column_names = ", ".join(column.name for column in table.columns)
-        table_lines.append(f"{table.name}: {column_names}")
+        label = f" ({table.description})" if table.description else ""
+        table_lines.append(f"{table.name}{label}: {column_names}")
 
     return "\n".join(
         [
@@ -156,7 +163,14 @@ def catalog_router_text(profile: DatabaseProfile) -> str:
     )
 
 
-def catalog_schema_context(profile: DatabaseProfile) -> str:
+def catalog_schema_context(
+    profile: DatabaseProfile, allowed_tables: set[str] | None = None
+) -> str:
+    allowed = (
+        {name.lower() for name in allowed_tables} if allowed_tables is not None else None
+    )
+    tables = [t for t in profile.tables if allowed is None or t.name.lower() in allowed]
+
     blocks = [
         f"Database id: {profile.id}",
         f"Name: {profile.name}",
@@ -166,12 +180,18 @@ def catalog_schema_context(profile: DatabaseProfile) -> str:
         "Tables:",
     ]
 
-    for table in profile.tables:
+    for table in tables:
         blocks.append(f"- {table.name}")
+        if table.description:
+            blocks.append(f"  purpose: {table.description}")
         for column in table.columns:
             primary_key = " primary_key" if column.primary_key else ""
             nullable = " nullable" if column.nullable else " not_null"
-            blocks.append(f"  - {column.name} ({column.type}{primary_key}{nullable})")
+            description = f" — {column.description}" if column.description else ""
+            blocks.append(f"  - {column.name} ({column.type}{primary_key}{nullable}){description}")
+            if column.enum_values:
+                legend = ", ".join(f"{code}={label}" for code, label in column.enum_values.items())
+                blocks.append(f"    values: {legend}")
         for foreign_key in table.foreign_keys:
             if foreign_key.referred_table:
                 blocks.append(
