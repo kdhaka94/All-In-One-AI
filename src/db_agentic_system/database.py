@@ -33,14 +33,18 @@ class DatabaseRegistry:
         database_ids: Iterable[str],
         catalog: DatabaseCatalog | None = None,
         source: str = "runtime",
+        tables_by_db: dict[str, list[str]] | None = None,
     ) -> dict[str, str]:
         profiles = catalog.by_id() if catalog else {}
         context = {}
         for database_id in database_ids:
+            allowed = None
+            if tables_by_db and database_id in tables_by_db:
+                allowed = set(tables_by_db[database_id])
             if source == "learned" and database_id in profiles:
-                context[database_id] = catalog_schema_context(profiles[database_id])
+                context[database_id] = catalog_schema_context(profiles[database_id], allowed)
             else:
-                context[database_id] = self._schema_for_database(database_id)
+                context[database_id] = self._schema_for_database(database_id, allowed)
         return context
 
     def execute_readonly(self, database_id: str, sql: str) -> list[dict[str, Any]]:
@@ -49,16 +53,22 @@ class DatabaseRegistry:
             result = connection.execute(text(sql))
             return [dict(row._mapping) for row in result.fetchall()]
 
-    def _schema_for_database(self, database_id: str) -> str:
+    def _schema_for_database(
+        self, database_id: str, allowed_tables: set[str] | None = None
+    ) -> str:
         db_config = self.get_config(database_id)
         engine = self.get_engine(database_id)
         inspector = inspect(engine)
 
         blocked_tables = {table.lower() for table in db_config.blocked_tables}
+        allowed = (
+            {name.lower() for name in allowed_tables} if allowed_tables is not None else None
+        )
         table_names = [
             table
             for table in (db_config.include_tables or inspector.get_table_names())
             if table.lower() not in blocked_tables
+            and (allowed is None or table.lower() in allowed)
         ]
         blocks = [
             f"Database id: {db_config.id}",

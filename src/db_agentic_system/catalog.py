@@ -160,7 +160,14 @@ def catalog_router_text(profile: DatabaseProfile) -> str:
     )
 
 
-def catalog_schema_context(profile: DatabaseProfile) -> str:
+def catalog_schema_context(
+    profile: DatabaseProfile, allowed_tables: set[str] | None = None
+) -> str:
+    allowed = (
+        {name.lower() for name in allowed_tables} if allowed_tables is not None else None
+    )
+    tables = [t for t in profile.tables if allowed is None or t.name.lower() in allowed]
+
     blocks = [
         f"Database id: {profile.id}",
         f"Name: {profile.name}",
@@ -170,7 +177,7 @@ def catalog_schema_context(profile: DatabaseProfile) -> str:
         "Tables:",
     ]
 
-    for table in profile.tables:
+    for table in tables:
         blocks.append(f"- {table.name}")
         if table.description:
             blocks.append(f"  purpose: {table.description}")
