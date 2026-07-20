@@ -17,6 +17,7 @@ from db_agentic_system.llm import (
 )
 from db_agentic_system.router import SemanticDatabaseRouter, build_embedder
 from db_agentic_system.state import AgentState, QueryResult
+from db_agentic_system.table_selection import TableSelector
 
 
 def build_graph(
@@ -36,13 +37,15 @@ def build_graph(
         }
 
     registry = DatabaseRegistry(config)
+    embedder = build_embedder()
     router = SemanticDatabaseRouter(
         databases=config.databases,
         max_selected=config.max_selected_databases,
         min_score=config.min_route_score,
-        embedder=build_embedder(),
+        embedder=embedder,
         catalog_text_by_database_id=catalog_texts,
     )
+    table_selector = TableSelector(max_tables=config.max_selected_tables, embedder=embedder)
     llm_holder: dict[str, BaseChatModel | None] = {"llm": llm}
 
     def get_llm() -> BaseChatModel:
@@ -111,9 +114,28 @@ def build_graph(
             }
         return {"selected_databases": selected}
 
+    def select_tables_node(state: AgentState) -> AgentState:
+        if catalog is None:
+            return {"selected_tables": {}}
+        profiles = catalog.by_id()
+        selected: dict[str, list[str]] = {}
+        for database in state["selected_databases"]:
+            profile = profiles.get(database["id"])
+            if profile is None:
+                continue
+            selected[database["id"]] = table_selector.select(state["question"], profile)
+        return {"selected_tables": selected}
+
     def schema_node(state: AgentState) -> AgentState:
         database_ids = [database["id"] for database in state["selected_databases"]]
-        return {"schema_context": registry.schema_context(database_ids, catalog, schema_source)}
+        return {
+            "schema_context": registry.schema_context(
+                database_ids,
+                catalog,
+                schema_source,
+                tables_by_db=state.get("selected_tables") or None,
+            )
+        }
 
     def sql_node(state: AgentState) -> AgentState:
         plans = generate_sql_plans(
@@ -223,6 +245,7 @@ def build_graph(
     graph.add_node("policy", policy_node)
     graph.add_node("contextualize", contextualize_node)
     graph.add_node("route_databases", route_node)
+    graph.add_node("select_tables", select_tables_node)
     graph.add_node("load_schema", schema_node)
     graph.add_node("generate_sql", sql_node)
     graph.add_node("execute_sql", execute_node)
@@ -238,8 +261,9 @@ def build_graph(
     graph.add_conditional_edges(
         "route_databases",
         _route_branch,
-        {"selected": "load_schema", "no_database": END},
+        {"selected": "select_tables", "no_database": END},
     )
+    graph.add_edge("select_tables", "load_schema")
     graph.add_edge("load_schema", "generate_sql")
     graph.add_edge("generate_sql", "execute_sql")
     graph.add_edge("execute_sql", "answer")

@@ -37,6 +37,7 @@ class AgentState(TypedDict, total=False):
     rejection_reason: str
     forced_database_ids: list[str]
     selected_databases: list[SelectedDatabase]
+    selected_tables: dict[str, list[str]]
     schema_context: dict[str, str]
     sql_plans: list[SqlPlan]
     validation_errors: list[str]
