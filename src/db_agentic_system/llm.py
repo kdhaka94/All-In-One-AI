@@ -3,12 +3,64 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from db_agentic_system.state import QueryResult, SqlPlan
+
+# Overridable indirection so tests can stub out real waiting.
+_sleep = time.sleep
+
+# Transient / rate-limit signatures worth retrying (case-insensitive).
+_RETRYABLE = re.compile(
+    r"429|resource[_ ]?exhausted|rate[ _]?limit|quota|503|overloaded|unavailable|timeout",
+    re.IGNORECASE,
+)
+# Provider-supplied "retry in 46s" / "retryDelay: '46s'" hints.
+_DELAY_HINT = re.compile(r"retry(?:[_ ]?delay)?['\":\s]+(\d+(?:\.\d+)?)\s*s", re.IGNORECASE)
+
+
+def _is_retryable(exc: Exception) -> bool:
+    return bool(_RETRYABLE.search(str(exc)))
+
+
+def _retry_delay_hint(exc: Exception) -> float | None:
+    match = _DELAY_HINT.search(str(exc))
+    return float(match.group(1)) if match else None
+
+
+def _invoke(
+    llm: BaseChatModel,
+    messages: Any,
+    *,
+    max_attempts: int = 4,
+    base_delay: float = 2.0,
+    max_delay: float = 20.0,
+) -> Any:
+    """Invoke a chat model, retrying transient/rate-limit errors with backoff.
+
+    Non-retryable errors propagate immediately. When retries are exhausted on a
+    rate-limit error, raise a clear message instead of a raw provider dump.
+    """
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return llm.invoke(messages)
+        except Exception as exc:
+            retryable = _is_retryable(exc)
+            if attempt >= max_attempts or not retryable:
+                if retryable:
+                    raise RuntimeError(
+                        "The model provider is rate-limited (quota / RESOURCE_EXHAUSTED). "
+                        "Wait a minute and retry, or switch to a provider/key with more quota. "
+                        f"Last error: {exc}"
+                    ) from exc
+                raise
+            hint = _retry_delay_hint(exc)
+            delay = hint if hint is not None else base_delay * (2 ** (attempt - 1))
+            _sleep(min(delay, max_delay))
 
 
 def build_chat_model() -> BaseChatModel:
@@ -61,7 +113,7 @@ def contextualize_question(
         f"{turn.get('role', 'unknown')}: {turn.get('content', '')}"
         for turn in conversation_history[-10:]
     )
-    response = llm.invoke(
+    response = _invoke(llm,
         [
             SystemMessage(
                 content=(
@@ -108,7 +160,7 @@ def generate_sql_plans(
     memory_context: str = "",
 ) -> list[SqlPlan]:
     schema_text = "\n\n---\n\n".join(schema_context.values())
-    response = llm.invoke(
+    response = _invoke(llm,
         [
             SystemMessage(
                 content=(
@@ -174,7 +226,7 @@ def generate_followup_sql_plans(
     query_results: list[QueryResult],
 ) -> list[SqlPlan]:
     schema_text = "\n\n---\n\n".join(schema_context.values())
-    response = llm.invoke(
+    response = _invoke(llm,
         [
             SystemMessage(
                 content=(
@@ -245,7 +297,7 @@ def synthesize_answer(
     results: list[QueryResult],
     validation_errors: list[str],
 ) -> str:
-    response = llm.invoke(
+    response = _invoke(llm,
         [
             SystemMessage(
                 content=(
@@ -289,7 +341,7 @@ def synthesize_context_answer(
         f"{turn.get('role', 'unknown')}: {turn.get('content', '')}"
         for turn in conversation_history[-12:]
     )
-    response = llm.invoke(
+    response = _invoke(llm,
         [
             SystemMessage(
                 content=(
