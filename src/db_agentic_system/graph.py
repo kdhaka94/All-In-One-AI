@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from langgraph.graph import END, START, StateGraph
 from langchain_core.language_models.chat_models import BaseChatModel
 
+from db_agentic_system.annotations import load_annotations, merge_annotations
 from db_agentic_system.catalog import DatabaseCatalog, catalog_router_text, load_catalog
 from db_agentic_system.config import AgentConfig
 from db_agentic_system.database import DatabaseRegistry
@@ -28,6 +31,11 @@ def build_graph(
 ):
     if catalog is None and config.catalog_path:
         catalog = load_catalog(config.catalog_path)
+
+    if catalog is not None and config.annotations_path and Path(
+        config.annotations_path
+    ).exists():
+        catalog = merge_annotations(catalog, load_annotations(config.annotations_path))
 
     catalog_texts = None
     if catalog is not None:
