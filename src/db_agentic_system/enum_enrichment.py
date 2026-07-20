@@ -16,7 +16,10 @@ def enrich_enums(profile: DatabaseProfile, engine: Engine) -> DatabaseProfile:
             text("SELECT enum_name, enum_id, enum_message_property FROM r_enum_value")
         )
         for enum_name, enum_id, message in rows:
-            legend.setdefault(str(enum_name), {})[str(enum_id)] = message
+            # Coerce to str so a NULL label can never break the dict[str, str] contract
+            # (which would otherwise make the whole catalog fail to load).
+            label = "" if message is None else str(message)
+            legend.setdefault(str(enum_name), {})[str(enum_id)] = label
 
     for table in profile.tables:
         for column in table.columns:
