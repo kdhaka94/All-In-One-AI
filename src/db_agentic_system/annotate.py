@@ -5,6 +5,7 @@ import json
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from db_agentic_system.catalog import DatabaseCatalog, TableProfile
+from db_agentic_system.llm import _content_to_text
 
 _PROMPT = (
     "You document database schemas. Given a table, return STRICT JSON: "
@@ -41,10 +42,13 @@ def annotate_catalog(catalog: DatabaseCatalog, llm: BaseChatModel) -> DatabaseCa
         for table in profile.tables:
             if table.description:
                 continue
-            payload = _parse(llm.invoke(_table_prompt(profile.name, table)).content)
+            raw = _content_to_text(llm.invoke(_table_prompt(profile.name, table)).content)
+            payload = _parse(raw)
             if payload.get("description"):
                 table.description = payload["description"]
-            column_texts = payload.get("columns", {}) or {}
+            column_texts = payload.get("columns", {})
+            if not isinstance(column_texts, dict):
+                column_texts = {}
             for column in table.columns:
                 text = column_texts.get(column.name)
                 if text and not column.description:

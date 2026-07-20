@@ -44,13 +44,22 @@ def _catalog() -> DatabaseCatalog:
 def test_annotate_fills_empty_descriptions() -> None:
     llm = FakeChatModel(
         responses=[
-            '{"description":"A loan account.","columns":{"loan_status_id":"Loan lifecycle status."}}'
+            '{"description":"A loan account.",'
+            '"columns":{"loan_status_id":"Loan lifecycle status."}}'
         ]
     )
     result = annotate_catalog(_catalog(), llm)
     table = result.databases[0].tables[0]
     assert table.description == "A loan account."
     assert table.columns[1].description == "Loan lifecycle status."
+
+
+def test_annotate_survives_columns_as_list() -> None:
+    llm = FakeChatModel(responses=['{"description":"A loan.","columns":["id"]}'])
+    result = annotate_catalog(_catalog(), llm)
+    table = result.databases[0].tables[0]
+    assert table.description == "A loan."
+    assert all(c.description is None for c in table.columns)  # malformed columns ignored
 
 
 def test_annotate_does_not_overwrite_existing_description() -> None:
