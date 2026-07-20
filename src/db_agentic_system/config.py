@@ -48,6 +48,8 @@ class AgentConfig(BaseModel):
     max_rows: int = 100
     max_sql_iterations: int = 3
     catalog_path: str | None = None
+    max_selected_tables: int | None = None
+    annotations_path: str | None = None
 
     @model_validator(mode="after")
     def require_unique_ids(self) -> "AgentConfig":
