@@ -31,6 +31,11 @@ def main() -> None:
     index = subparsers.add_parser("index", help="Learn database schemas into a catalog JSON file.")
     index.add_argument("--config", default="config/databases.yaml", help="Path to database config YAML.")
     index.add_argument("--output", default="config/database_catalog.json", help="Output catalog path.")
+    index.add_argument(
+        "--annotate",
+        action="store_true",
+        help="Run an LLM pass to fill table/column descriptions.",
+    )
 
     compare = subparsers.add_parser(
         "compare",
@@ -45,6 +50,11 @@ def main() -> None:
     if args.command == "index":
         config = load_config(args.config)
         catalog = build_catalog(config)
+        if args.annotate:
+            from db_agentic_system.annotate import annotate_catalog
+            from db_agentic_system.llm import build_chat_model
+
+            catalog = annotate_catalog(catalog, build_chat_model())
         save_catalog(catalog, args.output)
         print(f"Learned {len(catalog.databases)} database(s) into {args.output}")
         return
