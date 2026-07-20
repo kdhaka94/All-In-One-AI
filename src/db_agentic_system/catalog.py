@@ -57,10 +57,13 @@ class DatabaseCatalog(BaseModel):
 
 
 def build_catalog(config: AgentConfig) -> DatabaseCatalog:
+    from db_agentic_system.enum_enrichment import enrich_enums
+
     profiles = []
     for db_config in config.databases:
         engine = create_engine(db_config.resolved_uri)
-        profiles.append(profile_database(db_config, engine))
+        profile = profile_database(db_config, engine)
+        profiles.append(enrich_enums(profile, engine))
     return DatabaseCatalog(databases=profiles)
 
 
