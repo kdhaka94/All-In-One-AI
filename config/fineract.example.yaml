@@ -1,0 +1,25 @@
+catalog_path: config/fineract_catalog.json
+annotations_path: config/fineract_annotations.yaml
+max_selected_databases: 1
+max_selected_tables: 25
+min_route_score: 0.0
+max_rows: 100
+max_sql_iterations: 5
+
+databases:
+  - id: fineract
+    name: Fineract Core Banking
+    description: >-
+      Apache Fineract core banking system. Clients (m_client), their offices
+      (m_office) and loan officers (m_staff). Loan accounts (m_loan) with
+      products (m_product_loan), disbursements and repayments (m_loan_transaction).
+      Savings accounts (m_savings_account) with products (m_savings_product) and
+      deposits/withdrawals (m_savings_account_transaction). Payments, charges,
+      currencies, and enum-coded statuses decoded via r_enum_value.
+    uri_env: DATABASE_URL_FINERACT
+    dialect: postgres
+    include_tables: []
+    blocked_tables: []
+    blocked_columns: []
+    auto_block_sensitive_columns: true
+    sample_rows: 0

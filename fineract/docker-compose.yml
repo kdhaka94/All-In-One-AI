@@ -8,7 +8,9 @@ services:
       POSTGRES_PASSWORD: fineract_pg_pw
       POSTGRES_DB: postgres
     ports:
-      - "5432:5432"
+      # Host 5433 avoids clashing with a native Postgres often on 5432.
+      # Fineract connects to the DB over the internal network (db:5432) regardless.
+      - "5433:5432"
     volumes:
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
       - fineract_pgdata:/var/lib/postgresql/data

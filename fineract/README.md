@@ -23,7 +23,8 @@ curl -sk https://localhost:8443/fineract-provider/actuator/health
 
 - API base: `https://localhost:8443/fineract-provider/api/v1` (self-signed TLS — use `curl -k`)
 - Admin: `mifos` / `password`; tenant header: `Fineract-Platform-TenantId: default`
-- Postgres: `localhost:5432`, superuser `postgres` / `fineract_pg_pw`, DB `fineract_default`
+- Postgres: `localhost:5433` (compose maps `5433->5432` to avoid a native Postgres on 5432),
+  superuser `postgres` / `fineract_pg_pw`, DB `fineract_default`
 
 ## 2. Seed realistic data
 
@@ -43,7 +44,7 @@ docker compose -f fineract/docker-compose.yml exec -T db \
 ```
 
 The agent connects as `agent_ro` (SELECT-only) via
-`DATABASE_URL_FINERACT=postgresql+psycopg://agent_ro:agent_ro_pw@localhost:5432/fineract_default`
+`DATABASE_URL_FINERACT=postgresql+psycopg://agent_ro:agent_ro_pw@localhost:5433/fineract_default`
 (see `.env.example`).
 
 ## 4. Index the catalog (with AI annotations)
