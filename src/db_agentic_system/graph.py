@@ -53,7 +53,8 @@ def build_graph(
         embedder=embedder,
         catalog_text_by_database_id=catalog_texts,
     )
-    table_selector = TableSelector(max_tables=config.max_selected_tables, embedder=embedder)
+    selector_embedder = embedder if config.table_selection_embeddings else None
+    table_selector = TableSelector(max_tables=config.max_selected_tables, embedder=selector_embedder)
     llm_holder: dict[str, BaseChatModel | None] = {"llm": llm}
 
     def get_llm() -> BaseChatModel:

@@ -50,6 +50,9 @@ class AgentConfig(BaseModel):
     catalog_path: str | None = None
     max_selected_tables: int | None = None
     annotations_path: str | None = None
+    # Rank tables for selection with embeddings (default) or lexically. Lexical avoids
+    # embedding every table per query — useful for very large schemas or limited embedding quota.
+    table_selection_embeddings: bool = True
 
     @model_validator(mode="after")
     def require_unique_ids(self) -> "AgentConfig":

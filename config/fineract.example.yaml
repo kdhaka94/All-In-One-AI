@@ -5,6 +5,9 @@ max_selected_tables: 25
 min_route_score: 0.0
 max_rows: 100
 max_sql_iterations: 5
+# 285 tables — rank lexically to avoid embedding every table per query (free-tier
+# embedding quota is ~100 docs/min). Table names + annotations carry the domain words.
+table_selection_embeddings: false
 
 databases:
   - id: fineract

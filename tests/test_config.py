@@ -38,3 +38,20 @@ databases:
     config = load_config(config_file)
     assert config.max_selected_tables is None
     assert config.annotations_path is None
+    assert config.table_selection_embeddings is True
+
+
+def test_config_can_disable_table_selection_embeddings(tmp_path: Path) -> None:
+    config_file = tmp_path / "cfg.yaml"
+    config_file.write_text(
+        """
+table_selection_embeddings: false
+databases:
+  - id: x
+    name: X
+    description: d
+    uri: sqlite:///x.db
+"""
+    )
+    config = load_config(config_file)
+    assert config.table_selection_embeddings is False

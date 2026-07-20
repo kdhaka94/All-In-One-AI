@@ -46,6 +46,14 @@ const DATA_PROFILES = [
     schemaSource: "runtime",
     catalogReady: false,
   },
+  {
+    id: "fineract:learned",
+    label: "Fineract Core Banking · Learned catalog",
+    configPath: "config/fineract.example.yaml",
+    catalogPath: "config/fineract_catalog.json",
+    schemaSource: "learned",
+    catalogReady: true,
+  },
 ];
 const themePreference = window.matchMedia?.("(prefers-color-scheme: dark)") || {
   matches: false,
