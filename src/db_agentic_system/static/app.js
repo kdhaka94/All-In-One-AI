@@ -80,6 +80,7 @@ const elements = {
   selectedDatabases: document.getElementById("selectedDatabases"),
   trace: document.getElementById("trace"),
   sessionBadge: document.getElementById("sessionBadge"),
+  chatList: document.getElementById("chatList"),
 };
 
 const ROLE_LABELS = {
@@ -351,6 +352,114 @@ async function refreshDatabases({ preserveSelection = true } = {}) {
   }
 }
 
+function relativeTime(iso) {
+  if (!iso) return "";
+  const seconds = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function renderSessionList(sessions) {
+  if (!sessions.length) {
+    elements.chatList.className = "chat-list muted";
+    elements.chatList.textContent = "No saved chats";
+    return;
+  }
+  elements.chatList.className = "chat-list";
+  elements.chatList.innerHTML = sessions
+    .map((session) => {
+      const active = session.id === state.sessionId ? " active" : "";
+      return `<div class="chat-item${active}" data-id="${escapeHtml(session.id)}" role="button" tabindex="0">
+        <div class="chat-item-main">
+          <span class="chat-item-title">${escapeHtml(session.title || "Untitled chat")}</span>
+          <span class="chat-item-time">${escapeHtml(relativeTime(session.updated_at))}</span>
+        </div>
+        <button class="chat-delete" data-delete="${escapeHtml(session.id)}" title="Delete chat" aria-label="Delete chat">×</button>
+      </div>`;
+    })
+    .join("");
+}
+
+async function refreshSessions() {
+  try {
+    const response = await fetch("/api/sessions");
+    const data = await response.json();
+    renderSessionList(data.sessions || []);
+  } catch {
+    // History is a convenience; ignore load failures.
+  }
+}
+
+async function loadSession(sessionId) {
+  if (state.busy) return;
+  try {
+    const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
+    if (!response.ok) throw new Error("Could not load chat");
+    const data = await response.json();
+    const config = data.config || {};
+
+    if (config.config_path) {
+      const profile = DATA_PROFILES.find(
+        (item) =>
+          item.configPath === config.config_path &&
+          (!config.schema_source || item.schemaSource === config.schema_source)
+      );
+      if (profile) {
+        elements.profileSelect.value = profile.id;
+        renderProfileDetails();
+        await refreshDatabases({ preserveSelection: false });
+      }
+    }
+    if (config.model_id && [...elements.modelSelect.options].some((o) => o.value === config.model_id)) {
+      elements.modelSelect.value = config.model_id;
+      updateModelStatus();
+    }
+
+    elements.messages.innerHTML = "";
+    for (const message of data.messages || []) {
+      addMessage(message.role === "assistant" ? "assistant" : "user", message.content);
+    }
+    state.sessionId = sessionId;
+    elements.sessionBadge.textContent = `Session ${sessionId.slice(0, 8)}`;
+    elements.trace.innerHTML =
+      '<p class="muted">Generated SQL, validation errors, and result previews appear here.</p>';
+    refreshSessions();
+  } catch (error) {
+    addMessage("error", error.message);
+  }
+}
+
+async function deleteSession(sessionId) {
+  try {
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+    if (state.sessionId === sessionId) {
+      state.sessionId = null;
+      elements.sessionBadge.textContent = "New session";
+      elements.messages.innerHTML = "";
+    }
+    refreshSessions();
+  } catch {
+    // Ignore delete failures.
+  }
+}
+
+elements.chatList.addEventListener("click", (event) => {
+  const deleteTarget = event.target.closest("[data-delete]");
+  if (deleteTarget) {
+    event.stopPropagation();
+    deleteSession(deleteTarget.getAttribute("data-delete"));
+    return;
+  }
+  const item = event.target.closest(".chat-item");
+  if (item) {
+    loadSession(item.getAttribute("data-id"));
+  }
+});
+
 elements.chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = elements.messageInput.value.trim();
@@ -373,6 +482,7 @@ elements.chatForm.addEventListener("submit", async (event) => {
     elements.sessionBadge.textContent = `Session ${state.sessionId.slice(0, 8)}`;
     addMessage("assistant", data.answer);
     renderTrace(data);
+    refreshSessions();
   } catch (error) {
     addMessage("error", error.message);
   } finally {
@@ -473,6 +583,7 @@ elements.resetButton.addEventListener("click", async () => {
     '<p class="muted">Generated SQL, validation errors, and result previews appear here.</p>';
   elements.selectedDatabases.className = "pill-row muted";
   elements.selectedDatabases.textContent = "No query yet";
+  refreshSessions();
 });
 
 elements.toggleSidebar.addEventListener("click", () => {
@@ -498,6 +609,7 @@ syncTheme();
 initProfiles();
 refreshModels();
 refreshDatabases();
+refreshSessions();
 addMessage(
   "system",
   "Choose a data profile, index a catalog if needed, then ask a database question. Follow-ups will use this chat session as context."

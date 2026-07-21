@@ -5,3 +5,4 @@ __pycache__/
 *.egg-info/
 examples/*.db
 config/*_catalog.json
+db/*.db

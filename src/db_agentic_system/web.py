@@ -24,6 +24,7 @@ from db_agentic_system.llm import (
 )
 from db_agentic_system.graph import run_agent
 from db_agentic_system.memory import build_memory_context, make_memory_artifact
+from db_agentic_system.sessions import DEFAULT_DB_PATH, SessionStore
 
 
 class ChatRequest(BaseModel):
@@ -34,6 +35,16 @@ class ChatRequest(BaseModel):
     schema_source: str = Field(default="learned", pattern="^(learned|runtime)$")
     selected_database_ids: list[str] = Field(default_factory=list)
     model_id: str | None = None
+
+
+def _config_meta(request: "ChatRequest") -> dict[str, Any]:
+    """Profile/model metadata stored with a session so it can be resumed as-configured."""
+    return {
+        "config_path": request.config_path,
+        "catalog_path": request.catalog_path,
+        "schema_source": request.schema_source,
+        "model_id": request.model_id,
+    }
 
 
 def _model_overrides(model_id: str | None) -> dict[str, str]:
@@ -63,6 +74,21 @@ class ResetRequest(BaseModel):
 
 
 SESSIONS: dict[str, dict[str, Any]] = {}
+_SESSION_STORE: SessionStore | None = None
+
+
+def _store() -> SessionStore:
+    global _SESSION_STORE
+    if _SESSION_STORE is None:
+        _SESSION_STORE = SessionStore(os.getenv("DB_AGENT_SESSIONS_DB", DEFAULT_DB_PATH))
+    return _SESSION_STORE
+
+
+def _derive_title(message: str) -> str:
+    text = " ".join(message.split())
+    if not text:
+        return "New chat"
+    return text[:57] + "…" if len(text) > 60 else text
 
 
 def create_app() -> FastAPI:
@@ -194,7 +220,9 @@ def create_app() -> FastAPI:
                     forced_database_ids=request.selected_database_ids,
                     **_model_overrides(request.model_id),
                 )
-                response = _commit_chat_result(session_id, session, request.message, result)
+                response = _commit_chat_result(
+        session_id, session, request.message, result, config_meta=_config_meta(request)
+    )
                 yield _json_line({"type": "step", "title": "Running agent", "status": "complete"})
                 yield _json_line({"type": "result", "data": response})
             except Exception as exc:
@@ -204,8 +232,26 @@ def create_app() -> FastAPI:
 
     @app.post("/api/reset")
     def reset(request: ResetRequest) -> dict[str, str]:
+        # Drop the in-memory cache only; the saved chat stays in history.
         SESSIONS.pop(request.session_id, None)
         return {"message": "Session reset."}
+
+    @app.get("/api/sessions")
+    def list_sessions() -> dict[str, Any]:
+        return {"sessions": _store().list_sessions()}
+
+    @app.get("/api/sessions/{session_id}")
+    def get_session(session_id: str) -> dict[str, Any]:
+        stored = _store().load_session(session_id)
+        if stored is None:
+            raise HTTPException(status_code=404, detail="Session not found.")
+        return stored
+
+    @app.delete("/api/sessions/{session_id}")
+    def delete_session(session_id: str) -> dict[str, str]:
+        _store().delete_session(session_id)
+        SESSIONS.pop(session_id, None)
+        return {"message": "Session deleted."}
 
     return app
 
@@ -241,10 +287,21 @@ def _run_chat(request: ChatRequest) -> dict[str, Any]:
         forced_database_ids=request.selected_database_ids,
         **_model_overrides(request.model_id),
     )
-    return _commit_chat_result(session_id, session, request.message, result)
+    return _commit_chat_result(
+        session_id, session, request.message, result, config_meta=_config_meta(request)
+    )
 
 
 def _get_session(session_id: str) -> dict[str, Any]:
+    if session_id in SESSIONS:
+        return SESSIONS[session_id]
+    stored = _store().load_session(session_id)
+    if stored is not None:
+        SESSIONS[session_id] = {
+            "messages": stored["messages"],
+            "artifacts": stored["artifacts"],
+        }
+        return SESSIONS[session_id]
     return SESSIONS.setdefault(session_id, {"messages": [], "artifacts": []})
 
 
@@ -265,7 +322,9 @@ def _commit_chat_result(
     session: dict[str, Any],
     user_message: str,
     result: dict[str, Any],
+    config_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    is_first_turn = not session["messages"]
     answer = result.get("answer", "No answer produced.")
     summarized_results = _summarize_results(result.get("query_results", []))
     response = {
@@ -285,6 +344,13 @@ def _commit_chat_result(
     session["artifacts"] = session["artifacts"][-12:]
     response["history"] = session["messages"]
     response["memory_artifacts"] = session["artifacts"][-3:]
+
+    _store().save_session(
+        session_id,
+        session,
+        title=_derive_title(user_message) if is_first_turn else None,
+        config=config_meta or {},
+    )
     return response
 
 

@@ -23,7 +23,7 @@
         document.documentElement.dataset.theme = storedTheme || (prefersDark ? "dark" : "light");
       })();
     </script>
-    <link rel="stylesheet" href="/static/styles.css?v=20260711-2" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260721-chats" />
   </head>
   <body>
     <main id="shell" class="shell">
@@ -86,12 +86,17 @@
 
         <div class="actions">
           <button id="indexButton" class="btn btn-primary">Index Catalog</button>
-          <button id="resetButton" class="btn btn-secondary">Reset Chat</button>
+          <button id="resetButton" class="btn btn-secondary">New Chat</button>
         </div>
 
         <div class="selected-panel">
           <span class="eyebrow">Selected</span>
           <div id="selectedDatabases" class="pill-row muted">No query yet</div>
+        </div>
+
+        <div class="chat-history">
+          <span class="eyebrow">Recent Chats</span>
+          <div id="chatList" class="chat-list muted">No saved chats</div>
         </div>
       </aside>
 
@@ -128,6 +133,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-    <script src="/static/app.js?v=20260721-model"></script>
+    <script src="/static/app.js?v=20260721-chats"></script>
   </body>
 </html>
