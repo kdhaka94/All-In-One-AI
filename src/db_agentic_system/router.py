@@ -85,8 +85,10 @@ class SemanticDatabaseRouter:
         return formatted
 
 
-def build_embedder() -> Embedder | None:
-    provider = os.getenv("DB_AGENT_PROVIDER", "gemini").lower()
+def build_embedder(
+    provider: str | None = None, embedding_model: str | None = None
+) -> Embedder | None:
+    provider = (provider or os.getenv("DB_AGENT_PROVIDER", "gemini")).lower()
     if provider == "gemini":
         api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         if not api_key:
@@ -96,7 +98,7 @@ def build_embedder() -> Embedder | None:
         except ImportError:
             return None
 
-        model = os.getenv("DB_AGENT_EMBEDDING_MODEL", "models/gemini-embedding-001")
+        model = embedding_model or os.getenv("DB_AGENT_EMBEDDING_MODEL", "models/gemini-embedding-001")
         return GoogleGenerativeAIEmbeddings(model=model, google_api_key=api_key)
 
     if provider == "openai":
@@ -107,7 +109,7 @@ def build_embedder() -> Embedder | None:
         except ImportError:
             return None
 
-        model = os.getenv("DB_AGENT_EMBEDDING_MODEL", "text-embedding-3-small")
+        model = embedding_model or os.getenv("DB_AGENT_EMBEDDING_MODEL", "text-embedding-3-small")
         return OpenAIEmbeddings(model=model)
 
     return None

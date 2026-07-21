@@ -28,6 +28,9 @@ def build_graph(
     llm: BaseChatModel | None = None,
     catalog: DatabaseCatalog | None = None,
     schema_source: str = "runtime",
+    provider: str | None = None,
+    model: str | None = None,
+    embedding_model: str | None = None,
 ):
     if catalog is None and config.catalog_path:
         catalog = load_catalog(config.catalog_path)
@@ -45,7 +48,7 @@ def build_graph(
         }
 
     registry = DatabaseRegistry(config)
-    embedder = build_embedder()
+    embedder = build_embedder(provider, embedding_model)
     router = SemanticDatabaseRouter(
         databases=config.databases,
         max_selected=config.max_selected_databases,
@@ -59,7 +62,7 @@ def build_graph(
 
     def get_llm() -> BaseChatModel:
         if llm_holder["llm"] is None:
-            llm_holder["llm"] = build_chat_model()
+            llm_holder["llm"] = build_chat_model(provider, model)
         return llm_holder["llm"]
 
     def policy_node(state: AgentState) -> AgentState:
@@ -297,8 +300,18 @@ def run_agent(
     conversation_history: list[dict[str, str]] | None = None,
     memory_context: str = "",
     forced_database_ids: list[str] | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    embedding_model: str | None = None,
 ) -> AgentState:
-    app = build_graph(config, catalog=catalog, schema_source=schema_source)
+    app = build_graph(
+        config,
+        catalog=catalog,
+        schema_source=schema_source,
+        provider=provider,
+        model=model,
+        embedding_model=embedding_model,
+    )
     result = app.invoke(
         {
             "question": question,

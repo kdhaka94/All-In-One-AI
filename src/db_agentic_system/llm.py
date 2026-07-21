@@ -63,8 +63,8 @@ def _invoke(
             _sleep(min(delay, max_delay))
 
 
-def build_chat_model() -> BaseChatModel:
-    provider = os.getenv("DB_AGENT_PROVIDER", "gemini").lower()
+def build_chat_model(provider: str | None = None, model: str | None = None) -> BaseChatModel:
+    provider = (provider or os.getenv("DB_AGENT_PROVIDER", "gemini")).lower()
     if provider == "gemini":
         api_key = gemini_api_key()
         if not api_key:
@@ -79,7 +79,7 @@ def build_chat_model() -> BaseChatModel:
                 "Gemini provider requires langchain-google-genai. Run `pip install -e .`."
             ) from exc
 
-        model = os.getenv("DB_AGENT_MODEL", "gemini-3.1-flash-lite")
+        model = model or os.getenv("DB_AGENT_MODEL", "gemini-3.1-flash-lite")
         return ChatGoogleGenerativeAI(model=model, google_api_key=api_key, temperature=0)
 
     if provider == "openai":
@@ -90,14 +90,67 @@ def build_chat_model() -> BaseChatModel:
             )
         from langchain_openai import ChatOpenAI
 
-        model = os.getenv("DB_AGENT_MODEL", "gpt-4.1-mini")
+        model = model or os.getenv("DB_AGENT_MODEL", "gpt-4.1-mini")
         return ChatOpenAI(model=model, temperature=0)
 
-    raise RuntimeError(f"Unsupported DB_AGENT_PROVIDER {provider!r}. Use 'gemini' or 'openai'.")
+    raise RuntimeError(f"Unsupported provider {provider!r}. Use 'gemini' or 'openai'.")
 
 
 def gemini_api_key() -> str | None:
     return os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+
+
+# Selectable model presets for the UI switcher. API keys always come from the
+# environment; the request only ever names one of these ids.
+MODEL_OPTIONS: list[dict[str, str]] = [
+    {
+        "id": "gemini:gemini-3.1-flash-lite",
+        "label": "Gemini · gemini-3.1-flash-lite",
+        "provider": "gemini",
+        "model": "gemini-3.1-flash-lite",
+        "embedding_model": "models/gemini-embedding-001",
+    },
+    {
+        "id": "openai:gpt-5.4-mini",
+        "label": "OpenAI · gpt-5.4-mini",
+        "provider": "openai",
+        "model": "gpt-5.4-mini",
+        "embedding_model": "text-embedding-3-small",
+    },
+]
+
+
+def provider_key_configured(provider: str) -> bool:
+    provider = provider.lower()
+    if provider == "gemini":
+        return bool(gemini_api_key())
+    if provider == "openai":
+        return bool(os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY"))
+    return False
+
+
+def available_model_options() -> list[dict[str, str]]:
+    """Model presets whose provider has a configured API key."""
+    return [option for option in MODEL_OPTIONS if provider_key_configured(option["provider"])]
+
+
+def resolve_model_option(model_id: str | None) -> dict[str, str] | None:
+    if not model_id:
+        return None
+    return next((option for option in MODEL_OPTIONS if option["id"] == model_id), None)
+
+
+def default_model_id() -> str | None:
+    """The available preset matching the env provider/model, else the first available."""
+    options = available_model_options()
+    if not options:
+        return None
+    env_provider = os.getenv("DB_AGENT_PROVIDER", "gemini").lower()
+    env_model = os.getenv("DB_AGENT_MODEL")
+    for option in options:
+        if option["provider"] == env_provider and (env_model is None or option["model"] == env_model):
+            return option["id"]
+    return options[0]["id"]
 
 
 def contextualize_question(

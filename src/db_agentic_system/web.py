@@ -16,7 +16,12 @@ from pydantic import BaseModel, Field
 
 from db_agentic_system.catalog import build_catalog, load_catalog, save_catalog
 from db_agentic_system.config import load_config
-from db_agentic_system.llm import gemini_api_key
+from db_agentic_system.llm import (
+    available_model_options,
+    default_model_id,
+    gemini_api_key,
+    resolve_model_option,
+)
 from db_agentic_system.graph import run_agent
 from db_agentic_system.memory import build_memory_context, make_memory_artifact
 
@@ -28,6 +33,19 @@ class ChatRequest(BaseModel):
     catalog_path: str | None = "config/bank_catalog.json"
     schema_source: str = Field(default="learned", pattern="^(learned|runtime)$")
     selected_database_ids: list[str] = Field(default_factory=list)
+    model_id: str | None = None
+
+
+def _model_overrides(model_id: str | None) -> dict[str, str]:
+    """Resolve a UI model id to provider/model/embedding overrides for run_agent."""
+    option = resolve_model_option(model_id)
+    if not option:
+        return {}
+    return {
+        "provider": option["provider"],
+        "model": option["model"],
+        "embedding_model": option["embedding_model"],
+    }
 
 
 class IndexRequest(BaseModel):
@@ -75,6 +93,10 @@ def create_app() -> FastAPI:
             "default_catalog_exists": Path("config/bank_catalog.json").exists(),
             "session_count": len(SESSIONS),
         }
+
+    @app.get("/api/models")
+    def models() -> dict[str, Any]:
+        return {"models": available_model_options(), "default_id": default_model_id()}
 
     @app.post("/api/index")
     def index_catalog(request: IndexRequest) -> dict[str, Any]:
@@ -170,6 +192,7 @@ def create_app() -> FastAPI:
                     conversation_history=session["messages"],
                     memory_context=memory_context,
                     forced_database_ids=request.selected_database_ids,
+                    **_model_overrides(request.model_id),
                 )
                 response = _commit_chat_result(session_id, session, request.message, result)
                 yield _json_line({"type": "step", "title": "Running agent", "status": "complete"})
@@ -216,6 +239,7 @@ def _run_chat(request: ChatRequest) -> dict[str, Any]:
         conversation_history=session["messages"],
         memory_context=memory_context,
         forced_database_ids=request.selected_database_ids,
+        **_model_overrides(request.model_id),
     )
     return _commit_chat_result(session_id, session, request.message, result)
 

@@ -69,6 +69,7 @@ const elements = {
   profileSelect: document.getElementById("profileSelect"),
   profileDetails: document.getElementById("profileDetails"),
   databaseSelect: document.getElementById("databaseSelect"),
+  modelSelect: document.getElementById("modelSelect"),
   indexButton: document.getElementById("indexButton"),
   resetButton: document.getElementById("resetButton"),
   chatForm: document.getElementById("chatForm"),
@@ -137,6 +138,7 @@ function setBusy(busy) {
   elements.messageInput.disabled = busy;
   elements.profileSelect.disabled = busy;
   elements.databaseSelect.disabled = busy;
+  elements.modelSelect.disabled = busy;
 }
 
 function selectedProfile() {
@@ -151,6 +153,7 @@ function settingsPayload() {
     catalog_path: profile.catalogPath || null,
     schema_source: profile.schemaSource,
     selected_database_ids: selectedDatabaseId ? [selectedDatabaseId] : [],
+    model_id: elements.modelSelect.value || null,
   };
 }
 
@@ -295,12 +298,32 @@ function renderProfileDetails() {
     `${profile.configPath} · ${profile.catalogPath} · ${schemaLabel} · ${catalogStatus}`;
 }
 
-async function refreshStatus() {
-  const response = await fetch("/api/status");
-  const data = await response.json();
-  elements.statusText.textContent = data.model_configured
-    ? `${data.provider} · ${data.model}`
-    : `Set ${data.provider === "gemini" ? "GOOGLE_API_KEY" : "OPENAI_API_KEY"} to answer`;
+function updateModelStatus() {
+  const option = elements.modelSelect.selectedOptions[0];
+  if (option && option.value) {
+    elements.statusText.textContent = option.textContent;
+  }
+}
+
+async function refreshModels() {
+  try {
+    const response = await fetch("/api/models");
+    const data = await response.json();
+    const models = data.models || [];
+    if (!models.length) {
+      elements.modelSelect.innerHTML = '<option value="">No model configured</option>';
+      elements.statusText.textContent = "Set GOOGLE_API_KEY or OPENAI_API_KEY to answer";
+      return;
+    }
+    elements.modelSelect.innerHTML = models
+      .map((model) => `<option value="${escapeHtml(model.id)}">${escapeHtml(model.label)}</option>`)
+      .join("");
+    elements.modelSelect.value = data.default_id || models[0].id;
+    updateModelStatus();
+  } catch (error) {
+    elements.modelSelect.innerHTML = '<option value="">Default</option>';
+    elements.statusText.textContent = "Could not load models";
+  }
 }
 
 async function refreshDatabases({ preserveSelection = true } = {}) {
@@ -422,7 +445,7 @@ elements.indexButton.addEventListener("click", async () => {
     addMessage("system", `${data.message} Catalog: ${data.output_path}`);
     profile.catalogReady = true;
     renderProfileDetails();
-    await refreshStatus();
+    await refreshModels();
     await refreshDatabases();
   } catch (error) {
     addMessage("error", error.message);
@@ -436,6 +459,8 @@ elements.profileSelect.addEventListener("change", () => {
   renderProfileDetails();
   refreshDatabases({ preserveSelection: false });
 });
+
+elements.modelSelect.addEventListener("change", updateModelStatus);
 
 elements.resetButton.addEventListener("click", async () => {
   if (state.sessionId) {
@@ -471,7 +496,7 @@ themePreference.addEventListener("change", () => {
 
 syncTheme();
 initProfiles();
-refreshStatus();
+refreshModels();
 refreshDatabases();
 addMessage(
   "system",

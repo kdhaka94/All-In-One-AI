@@ -34,7 +34,10 @@ class FakeEmbedder:
 
 def test_select_tables_limits_tables_fed_to_sql(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("DB_AGENT_PROVIDER", "test")
-    monkeypatch.setattr("db_agentic_system.graph.build_embedder", lambda: FakeEmbedder())
+    monkeypatch.setattr(
+        "db_agentic_system.graph.build_embedder",
+        lambda provider=None, embedding_model=None: FakeEmbedder(),
+    )
 
     db_path = tmp_path / "test.db"
     connection = sqlite3.connect(db_path)
