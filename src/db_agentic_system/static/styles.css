@@ -502,6 +502,48 @@ html[data-theme="dark"] .theme-icon-sun {
   color: var(--danger);
 }
 
+/* ----- click-to-inspect trace on agent replies ----- */
+
+.message.has-trace {
+  cursor: pointer;
+}
+
+.message.has-trace .trace-hint {
+  align-self: flex-start;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--muted-3);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.message.has-trace:hover .trace-hint,
+.message.has-trace:focus-within .trace-hint,
+.message.trace-active .trace-hint {
+  opacity: 1;
+}
+
+.message.has-trace:hover .trace-hint {
+  color: var(--accent);
+}
+
+.message.trace-active .trace-hint {
+  color: var(--accent);
+  background: var(--pill-bg);
+}
+
+.message.trace-active .message-text.markdown {
+  box-shadow: inset 2px 0 0 var(--accent);
+  padding-left: 12px;
+  margin-left: -12px;
+}
+
 /* ----- markdown-rendered agent replies ----- */
 
 .message-text.markdown {

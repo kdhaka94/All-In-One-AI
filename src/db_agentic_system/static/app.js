@@ -103,7 +103,7 @@ async function api(path, body) {
   return data;
 }
 
-function addMessage(role, text) {
+function addMessage(role, text, trace) {
   const node = document.createElement("div");
   node.className = `message role-${role}`;
 
@@ -128,8 +128,53 @@ function addMessage(role, text) {
   }
 
   node.appendChild(body);
+
+  // Agent replies carry the turn's trace; make them click-to-inspect.
+  if (role === "assistant" && hasTraceContent(trace)) {
+    node.classList.add("has-trace");
+    node.title = "Click to view this answer's trace";
+    const hint = document.createElement("button");
+    hint.type = "button";
+    hint.className = "trace-hint";
+    hint.textContent = "View trace";
+    node.appendChild(hint);
+    node.addEventListener("click", (event) => {
+      // Let links inside the answer behave normally.
+      if (event.target.closest("a")) return;
+      showTrace(trace, node);
+    });
+  }
+
   elements.messages.appendChild(node);
   elements.chatScroll.scrollTop = elements.chatScroll.scrollHeight;
+  return node;
+}
+
+function hasTraceContent(trace) {
+  if (!trace) return false;
+  return Boolean(
+    trace.standalone_question ||
+      trace.selected_databases?.length ||
+      trace.sql_plans?.length ||
+      trace.validation_errors?.length ||
+      trace.execution_errors?.length ||
+      trace.query_results?.length
+  );
+}
+
+function setActiveTraceNode(node) {
+  document
+    .querySelectorAll(".message.trace-active")
+    .forEach((element) => element.classList.remove("trace-active"));
+  if (node) node.classList.add("trace-active");
+}
+
+function showTrace(trace, node) {
+  renderTrace(trace);
+  // Clicking a message is an explicit request to see the trace, so reveal the
+  // panel if the user had collapsed it.
+  elements.shell.classList.remove("trace-collapsed");
+  setActiveTraceNode(node);
 }
 
 function setBusy(busy) {
@@ -196,6 +241,15 @@ function renderTrace(data) {
       traceSection(
         "Validation",
         `<pre class="trace-alert">${escapeHtml(data.validation_errors.join("\n"))}</pre>`
+      )
+    );
+  }
+
+  if (data.execution_errors?.length) {
+    sections.push(
+      traceSection(
+        "Execution errors",
+        `<pre class="trace-alert">${escapeHtml(data.execution_errors.join("\n"))}</pre>`
       )
     );
   }
@@ -420,13 +474,30 @@ async function loadSession(sessionId) {
     }
 
     elements.messages.innerHTML = "";
+    const traces = data.traces || [];
+    let lastTraceNode = null;
+    let assistantIndex = 0;
     for (const message of data.messages || []) {
-      addMessage(message.role === "assistant" ? "assistant" : "user", message.content);
+      if (message.role === "assistant") {
+        const trace = traces[assistantIndex] || null;
+        const node = addMessage("assistant", message.content, trace);
+        assistantIndex += 1;
+        if (hasTraceContent(trace)) lastTraceNode = node;
+      } else {
+        addMessage("user", message.content);
+      }
     }
     state.sessionId = sessionId;
     elements.sessionBadge.textContent = `Session ${sessionId.slice(0, 8)}`;
-    elements.trace.innerHTML =
-      '<p class="muted">Generated SQL, validation errors, and result previews appear here.</p>';
+    // Restore the trace we last showed for this chat rather than a blank panel.
+    if (traces.length) {
+      renderTrace(traces[traces.length - 1]);
+      setActiveTraceNode(lastTraceNode);
+    } else {
+      elements.trace.innerHTML =
+        '<p class="muted">Generated SQL, validation errors, and result previews appear here.</p>';
+      setActiveTraceNode(null);
+    }
     refreshSessions();
   } catch (error) {
     addMessage("error", error.message);
@@ -480,8 +551,9 @@ elements.chatForm.addEventListener("submit", async (event) => {
     });
     state.sessionId = data.session_id;
     elements.sessionBadge.textContent = `Session ${state.sessionId.slice(0, 8)}`;
-    addMessage("assistant", data.answer);
+    const assistantNode = addMessage("assistant", data.answer, data);
     renderTrace(data);
+    setActiveTraceNode(assistantNode);
     refreshSessions();
   } catch (error) {
     addMessage("error", error.message);

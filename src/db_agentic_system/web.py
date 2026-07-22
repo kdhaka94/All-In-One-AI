@@ -300,9 +300,10 @@ def _get_session(session_id: str) -> dict[str, Any]:
         SESSIONS[session_id] = {
             "messages": stored["messages"],
             "artifacts": stored["artifacts"],
+            "traces": stored.get("traces", []),
         }
         return SESSIONS[session_id]
-    return SESSIONS.setdefault(session_id, {"messages": [], "artifacts": []})
+    return SESSIONS.setdefault(session_id, {"messages": [], "artifacts": [], "traces": []})
 
 
 def _load_optional_catalog(catalog_path: str | None):
@@ -334,14 +335,28 @@ def _commit_chat_result(
         "selected_databases": result.get("selected_databases", []),
         "sql_plans": result.get("sql_plans", []),
         "validation_errors": result.get("validation_errors", []),
+        "execution_errors": result.get("execution_errors", []),
         "query_results": summarized_results,
         "history": session["messages"],
     }
     session["messages"].append({"role": "user", "content": user_message})
     session["messages"].append({"role": "assistant", "content": answer})
     session["artifacts"].append(make_memory_artifact(user_message, result, summarized_results))
+    # One display-trace per assistant turn, kept in lockstep with messages so the
+    # k-th assistant message maps to the k-th trace when a chat is reloaded.
+    session.setdefault("traces", []).append(
+        {
+            "standalone_question": response["standalone_question"],
+            "selected_databases": response["selected_databases"],
+            "sql_plans": response["sql_plans"],
+            "validation_errors": response["validation_errors"],
+            "execution_errors": response["execution_errors"],
+            "query_results": summarized_results,
+        }
+    )
     session["messages"] = session["messages"][-24:]
     session["artifacts"] = session["artifacts"][-12:]
+    session["traces"] = session["traces"][-12:]
     response["history"] = session["messages"]
     response["memory_artifacts"] = session["artifacts"][-3:]
 

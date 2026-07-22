@@ -343,6 +343,62 @@ def generate_followup_sql_plans(
     ]
 
 
+def generate_repair_sql_plans(
+    llm: BaseChatModel,
+    question: str,
+    schema_context: dict[str, str],
+    memory_context: str,
+    failed_plans: list[dict[str, str]],
+) -> list[SqlPlan]:
+    """Given SELECT queries that failed at execution, propose corrected SELECTs.
+
+    ``failed_plans`` items carry the failing ``sql`` and the database ``error`` so the
+    model can fix the specific problem (wrong column, bad join, unknown function).
+    """
+    schema_text = "\n\n---\n\n".join(schema_context.values())
+    response = _invoke(llm,
+        [
+            SystemMessage(
+                content=(
+                    "You repair SELECT queries that failed to run against the database.\n"
+                    "Rules:\n"
+                    "- Return only valid JSON. Do not use markdown, comments, trailing commas, "
+                    "or unquoted object keys.\n"
+                    "- Each failed query includes the database error message. Fix the specific "
+                    "cause: a wrong or missing column, a bad join, an unknown function, or a "
+                    "syntax problem.\n"
+                    "- Use only tables and columns shown in schema context. If the query used a "
+                    "column that is not in the schema, replace it with the correct one or drop it.\n"
+                    "- Keep the original intent (purpose) of each query.\n"
+                    "- Do not repeat a query verbatim if it failed; change what caused the error.\n"
+                    "- Only SELECT statements. Do not create, update, delete, alter, or drop "
+                    "anything, and never select blocked columns.\n"
+                    "- If a failed query cannot be repaired from the shown schema, omit it.\n"
+                    "- If nothing can be repaired, return an empty plans list.\n"
+                )
+            ),
+            HumanMessage(
+                content=(
+                    f"Question:\n{question}\n\n"
+                    f"Structured memory:\n{memory_context}\n\n"
+                    f"Schema context:\n{schema_text}\n\n"
+                    f"Failed queries and their database errors JSON:\n"
+                    f"{json.dumps(failed_plans, default=str)}\n\n"
+                    "Return JSON with this shape:\n"
+                    '{"plans":[{"database_id":"...","purpose":"...","sql":"SELECT ..."}]}'
+                )
+            ),
+        ]
+    )
+    payload = _parse_json_response(response.content)
+    plans = payload.get("plans", [])
+    return [
+        {"database_id": plan["database_id"], "purpose": plan.get("purpose", ""), "sql": plan["sql"]}
+        for plan in plans
+        if "database_id" in plan and "sql" in plan
+    ]
+
+
 def synthesize_answer(
     llm: BaseChatModel,
     question: str,

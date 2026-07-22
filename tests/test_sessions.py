@@ -8,6 +8,19 @@ def _session(*messages):
     return {"messages": msgs, "artifacts": [{"note": "a"}]}
 
 
+def test_traces_round_trip_and_default_to_empty(tmp_path) -> None:
+    store = SessionStore(str(tmp_path / "s.db"))
+    # Legacy session saved without a traces key loads as an empty list.
+    store.save_session("legacy", _session(("user", "hi")))
+    assert store.load_session("legacy")["traces"] == []
+
+    session = _session(("user", "hi"), ("assistant", "hello"))
+    session["traces"] = [{"standalone_question": "hi", "sql_plans": [{"sql": "SELECT 1"}]}]
+    store.save_session("s1", session)
+    loaded = store.load_session("s1")
+    assert loaded["traces"] == session["traces"]
+
+
 def test_save_and_load_round_trip(tmp_path) -> None:
     store = SessionStore(str(tmp_path / "s.db"))
     session = _session(("user", "hi"), ("assistant", "hello"))

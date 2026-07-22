@@ -48,7 +48,11 @@ class SessionStore:
     ) -> None:
         now = _now()
         payload = json.dumps(
-            {"messages": session.get("messages", []), "artifacts": session.get("artifacts", [])},
+            {
+                "messages": session.get("messages", []),
+                "artifacts": session.get("artifacts", []),
+                "traces": session.get("traces", []),
+            },
             default=str,
         )
         with closing(self._connect()) as conn, conn:
@@ -84,6 +88,7 @@ class SessionStore:
             "config": json.loads(row["config"] or "{}"),
             "messages": payload.get("messages", []),
             "artifacts": payload.get("artifacts", []),
+            "traces": payload.get("traces", []),
         }
 
     def list_sessions(self, limit: int = 50) -> list[dict[str, Any]]:

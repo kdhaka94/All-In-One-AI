@@ -41,5 +41,6 @@ class AgentState(TypedDict, total=False):
     schema_context: dict[str, str]
     sql_plans: list[SqlPlan]
     validation_errors: list[str]
+    execution_errors: list[str]
     query_results: list[QueryResult]
     answer: str

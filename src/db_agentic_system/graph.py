@@ -14,6 +14,7 @@ from db_agentic_system.llm import (
     build_chat_model,
     contextualize_question,
     generate_followup_sql_plans,
+    generate_repair_sql_plans,
     generate_sql_plans,
     synthesize_answer,
     synthesize_context_answer,
@@ -161,12 +162,14 @@ def build_graph(
     def execute_node(state: AgentState) -> AgentState:
         query_results: list[QueryResult] = []
         validation_errors: list[str] = []
+        execution_errors: list[str] = []
         sanitized_plans: list[dict[str, str]] = []
         pending_plans = list(state.get("sql_plans", []))
         seen_sql: set[tuple[str, str]] = set()
 
         for iteration in range(max(config.max_sql_iterations, 1)):
             executed_in_iteration = False
+            failed_plans: list[dict[str, str]] = []
             for plan in pending_plans:
                 database_id = plan["database_id"]
                 db_config = registry.get_config(database_id)
@@ -193,7 +196,17 @@ def build_graph(
                     "sql": sql,
                 }
                 sanitized_plans.append(executed_plan)
-                rows = registry.execute_readonly(database_id, sql)
+                # Validation only proves the SQL is safe, not that it will run. A query
+                # can pass every guard and still be rejected by the database (unknown
+                # column, bad join, missing function). Catch that here so one bad query
+                # degrades to a message and can be repaired, instead of crashing the turn.
+                try:
+                    rows = registry.execute_readonly(database_id, sql)
+                except Exception as exc:  # noqa: BLE001 - any DB failure is captured, not raised
+                    message = _readable_db_error(exc)
+                    execution_errors.append(f"{database_id}: {message}")
+                    failed_plans.append({**executed_plan, "error": message})
+                    continue
                 query_results.append(
                     {
                         "database_id": database_id,
@@ -204,24 +217,43 @@ def build_graph(
                 )
                 executed_in_iteration = True
 
-            if iteration >= config.max_sql_iterations - 1 or not executed_in_iteration:
+            if iteration >= config.max_sql_iterations - 1:
                 break
 
-            pending_plans = generate_followup_sql_plans(
-                get_llm(),
-                state["question"],
-                state["schema_context"],
-                state.get("memory_context", ""),
-                sanitized_plans,
-                query_results,
-            )
-            if not pending_plans:
+            next_plans: list[dict[str, str]] = []
+            # Layer 2 (self-repair): hand each failed query back to the model with the
+            # database error so it can fix the specific cause and try again.
+            if failed_plans:
+                next_plans.extend(
+                    generate_repair_sql_plans(
+                        get_llm(),
+                        state["question"],
+                        state["schema_context"],
+                        state.get("memory_context", ""),
+                        failed_plans,
+                    )
+                )
+            # Multi-hop: follow up on successful results that reveal new predicates.
+            if executed_in_iteration:
+                next_plans.extend(
+                    generate_followup_sql_plans(
+                        get_llm(),
+                        state["question"],
+                        state["schema_context"],
+                        state.get("memory_context", ""),
+                        sanitized_plans,
+                        query_results,
+                    )
+                )
+            if not next_plans:
                 break
+            pending_plans = next_plans
 
         return {
             "sql_plans": sanitized_plans,
             "query_results": query_results,
             "validation_errors": validation_errors,
+            "execution_errors": execution_errors,
         }
 
     def answer_node(state: AgentState) -> AgentState:
@@ -231,6 +263,13 @@ def build_graph(
                     "answer": (
                         "I cannot answer that because the requested data is blocked by the access "
                         "policy."
+                    )
+                }
+            if state.get("execution_errors"):
+                return {
+                    "answer": (
+                        "I could not answer that because the database query failed to run. "
+                        "Try rephrasing the question."
                     )
                 }
             if state.get("conversation_history") or state.get("memory_context"):
@@ -282,6 +321,17 @@ def build_graph(
     graph.add_edge("answer", END)
 
     return graph.compile()
+
+
+def _readable_db_error(exc: Exception) -> str:
+    """Condense a database exception into a short, single-line message.
+
+    SQLAlchemy wraps the driver error and appends the SQL plus a docs URL; the
+    underlying ``orig`` (e.g. ``no such column: hometown``) is the useful part.
+    """
+    orig = getattr(exc, "orig", None)
+    message = str(orig) if orig is not None else str(exc)
+    return " ".join(message.split())[:300]
 
 
 def _policy_branch(state: AgentState) -> str:
