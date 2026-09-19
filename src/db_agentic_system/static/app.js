@@ -5,6 +5,8 @@ const state = {
 };
 
 const THEME_STORAGE_KEY = "db-agent-theme";
+// catalogReady starts null (unknown) and is resolved from /api/databases when a
+// profile is selected — the catalog files are gitignored, so it cannot be known here.
 const DATA_PROFILES = [
   {
     id: "bank:learned",
@@ -12,7 +14,7 @@ const DATA_PROFILES = [
     configPath: "config/bank.example.yaml",
     catalogPath: "config/bank_catalog.json",
     schemaSource: "learned",
-    catalogReady: true,
+    catalogReady: null,
   },
   {
     id: "bank:runtime",
@@ -20,7 +22,7 @@ const DATA_PROFILES = [
     configPath: "config/bank.example.yaml",
     catalogPath: "config/bank_catalog.json",
     schemaSource: "runtime",
-    catalogReady: true,
+    catalogReady: null,
   },
   {
     id: "murder:learned",
@@ -28,7 +30,7 @@ const DATA_PROFILES = [
     configPath: "config/murder_mystery.example.yaml",
     catalogPath: "config/murder_mystery_catalog.json",
     schemaSource: "learned",
-    catalogReady: true,
+    catalogReady: null,
   },
   {
     id: "murder:runtime",
@@ -36,7 +38,7 @@ const DATA_PROFILES = [
     configPath: "config/murder_mystery.example.yaml",
     catalogPath: "config/murder_mystery_catalog.json",
     schemaSource: "runtime",
-    catalogReady: true,
+    catalogReady: null,
   },
   {
     id: "generic:runtime",
@@ -44,7 +46,7 @@ const DATA_PROFILES = [
     configPath: "config/databases.example.yaml",
     catalogPath: "config/databases_catalog.json",
     schemaSource: "runtime",
-    catalogReady: false,
+    catalogReady: null,
   },
   {
     id: "fineract:learned",
@@ -52,7 +54,7 @@ const DATA_PROFILES = [
     configPath: "config/fineract.example.yaml",
     catalogPath: "config/fineract_catalog.json",
     schemaSource: "learned",
-    catalogReady: true,
+    catalogReady: null,
   },
 ];
 const themePreference = window.matchMedia?.("(prefers-color-scheme: dark)") || {
@@ -336,18 +338,36 @@ function syncTheme() {
   setTheme(savedTheme || (themePreference.matches ? "dark" : "light"), Boolean(savedTheme));
 }
 
-function initProfiles() {
+function setCatalogReady(profile, ready) {
+  if (profile.catalogReady === ready) return;
+  profile.catalogReady = ready;
+  renderProfileOptions();
+  renderProfileDetails();
+}
+
+function renderProfileOptions() {
+  const selected = elements.profileSelect.value;
   elements.profileSelect.innerHTML = DATA_PROFILES.map((profile) => {
-    const suffix = profile.schemaSource === "learned" && !profile.catalogReady ? " (catalog missing)" : "";
+    const suffix = profile.catalogReady === false ? " (catalog missing)" : "";
     return `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.label)}${escapeHtml(suffix)}</option>`;
   }).join("");
-  elements.profileSelect.value = DATA_PROFILES[0].id;
+  elements.profileSelect.value = selected || DATA_PROFILES[0].id;
+}
+
+function initProfiles() {
+  elements.profileSelect.value = "";
+  renderProfileOptions();
   renderProfileDetails();
 }
 
 function renderProfileDetails() {
   const profile = selectedProfile();
-  const catalogStatus = profile.catalogReady ? "catalog ready" : "catalog missing";
+  const catalogStatus =
+    profile.catalogReady === null
+      ? "checking catalog"
+      : profile.catalogReady
+        ? "catalog ready"
+        : "catalog missing — press Index Catalog";
   const schemaLabel = profile.schemaSource === "runtime" ? "live schema" : "learned catalog";
   elements.profileDetails.textContent =
     `${profile.configPath} · ${profile.catalogPath} · ${schemaLabel} · ${catalogStatus}`;
@@ -389,8 +409,12 @@ async function refreshDatabases({ preserveSelection = true } = {}) {
       config_path: profile.configPath,
       catalog_path: profile.catalogPath || null,
     });
+    const databases = data.databases || [];
+    // A learned table count comes back only when the catalog file exists and covers
+    // this profile's databases — that is the honest signal for "catalog ready".
+    setCatalogReady(profile, databases.some((database) => database.tables !== null));
     const options = ['<option value="">Auto-route</option>'];
-    for (const database of data.databases || []) {
+    for (const database of databases) {
       const tableText = database.tables === null ? "" : ` (${database.tables} tables)`;
       options.push(
         `<option value="${escapeHtml(database.id)}">${escapeHtml(database.name)} · ${escapeHtml(database.id)}${escapeHtml(tableText)}</option>`
@@ -625,8 +649,7 @@ elements.indexButton.addEventListener("click", async () => {
       output_path: profile.catalogPath,
     });
     addMessage("system", `${data.message} Catalog: ${data.output_path}`);
-    profile.catalogReady = true;
-    renderProfileDetails();
+    setCatalogReady(profile, true);
     await refreshModels();
     await refreshDatabases();
   } catch (error) {

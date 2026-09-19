@@ -138,7 +138,7 @@ In practice, the best default is usually learned routing plus runtime verificati
 
 ## Example Unknown SQLite Database
 
-This repo includes [config/murder_mystery.example.yaml](/Users/kuldeepdhaka/Documents/All-In-One-AI/config/murder_mystery.example.yaml), which points at `/Users/kuldeepdhaka/Downloads/sql-murder-mystery.db` as a generic test database.
+This repo includes [config/murder_mystery.example.yaml](config/murder_mystery.example.yaml) as a generic test database. Both of its entries read their SQLite URLs from the environment — set `DATABASE_URL_MYSTERY` and `DATABASE_URL_CHINOOK` in `.env` to your own copies of those files (see `.env.example`).
 
 ```bash
 db-agent index --config config/murder_mystery.example.yaml --output config/murder_mystery_catalog.json
@@ -193,7 +193,7 @@ The session also keeps hidden structured memory from recent traces:
 
 That hidden memory is used for follow-ups like “what did they say?”, “what was it?”, or “show the previous person’s orders,” where the visible answer may not contain enough IDs to query another table.
 
-The current UI stores this memory in process memory. [db/agent_memory.sql](/Users/kuldeepdhaka/Documents/All-In-One-AI/db/agent_memory.sql) defines the generic tables for a persistent store: sessions, turns, SQL results, entities, facts, and step events.
+The current UI stores this memory in process memory. [db/agent_memory.sql](db/agent_memory.sql) defines the generic tables for a persistent store: sessions, turns, SQL results, entities, facts, and step events.
 
 The right panel shows the trace for the latest answer:
 

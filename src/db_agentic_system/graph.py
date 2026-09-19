@@ -36,6 +36,14 @@ def build_graph(
     record_scope: RecordScope | None = None,
 ):
     if catalog is None and config.catalog_path:
+        # A config that names a catalog needs that catalog: falling back to live schema
+        # here would quietly skip table selection and push every table into the prompt.
+        if not Path(config.catalog_path).exists():
+            raise ValueError(
+                f"Catalog not found: {config.catalog_path}. Learn it first with "
+                f"`db-agent index --config <config> --output {config.catalog_path}`, "
+                "or press Index Catalog in the web UI."
+            )
         catalog = load_catalog(config.catalog_path)
 
     if catalog is not None and config.annotations_path and Path(

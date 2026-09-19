@@ -14,7 +14,7 @@ databases:
       amounts, interest rates, and start dates. Transactions with amounts,
       dates, and the merchant involved. Merchants and their cities. Branches
       with managers, cities, and countries.
-    uri: sqlite:////Users/kuldeepdhaka/Downloads/banking_dataset_kaggle/data/database/bank_sqlite.db
+    uri_env: DATABASE_URL_BANK
     dialect: sqlite
     include_tables: []
     blocked_tables: []
