@@ -26,3 +26,24 @@ databases:
     blocked_columns: []
     auto_block_sensitive_columns: true
     sample_rows: 0
+
+# The operations screen investigates one loan account at a time. Every query the
+# agent runs is pinned to the selected loan through these columns, so a run can
+# read that loan's transactions, schedule and arrears but never the portfolio.
+ops:
+  database_id: fineract
+  table: m_loan
+  key_column: id
+  label_columns: [account_no]
+  search_columns: [account_no, external_id]
+  detail_columns: [principal_amount, loan_status_id, currency_code]
+  # Other tables carry the loan's key under these names.
+  alias_columns: [loan_id]
+  # The loan's own row points at its client, so that client's record is in scope too.
+  related_columns:
+    client_id: m_client.id
+  # Enum decode tables hold no customer data, so they need no loan filter.
+  reference_tables: [r_enum_value]
+  default_question: >-
+    Summarise this loan account: its status, what has been repaid, whether it is
+    in arrears, and anything an operator should act on.

@@ -23,7 +23,21 @@ from db_agentic_system.llm import (
     resolve_model_option,
 )
 from db_agentic_system.graph import run_agent
+from db_agentic_system.database import DatabaseRegistry
 from db_agentic_system.memory import build_memory_context, make_memory_artifact
+from db_agentic_system.ops import (
+    OpsError,
+    blocked_plans,
+    brief_segments,
+    build_evidence,
+    cited_evidence_ids,
+    list_records,
+    load_record,
+    ops_config,
+    record_summary,
+)
+from db_agentic_system.llm import synthesize_brief
+from db_agentic_system.scope import build_record_scope
 from db_agentic_system.sessions import DEFAULT_DB_PATH, SessionStore
 
 
@@ -71,6 +85,21 @@ class DatabaseListRequest(BaseModel):
 
 class ResetRequest(BaseModel):
     session_id: str
+
+
+class OpsRecordsRequest(BaseModel):
+    config_path: str = "config/bank.example.yaml"
+    search: str = ""
+    limit: int | None = None
+
+
+class OpsBriefRequest(BaseModel):
+    record_id: str
+    config_path: str = "config/bank.example.yaml"
+    catalog_path: str | None = "config/bank_catalog.json"
+    schema_source: str = Field(default="learned", pattern="^(learned|runtime)$")
+    question: str | None = None
+    model_id: str | None = None
 
 
 SESSIONS: dict[str, dict[str, Any]] = {}
@@ -230,6 +259,40 @@ def create_app() -> FastAPI:
 
         return StreamingResponse(generate(), media_type="application/x-ndjson")
 
+    @app.get("/ops")
+    def ops_screen() -> FileResponse:
+        return FileResponse(str(static_dir.joinpath("ops.html")))
+
+    @app.post("/api/ops/records")
+    def ops_records(request: OpsRecordsRequest) -> dict[str, Any]:
+        try:
+            config = load_config(request.config_path)
+            ops = ops_config(config)
+            registry = DatabaseRegistry(config)
+            records = list_records(registry, config, request.search, request.limit)
+        except OpsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        return {
+            "database_id": ops.database_id,
+            "table": ops.table,
+            "key_column": ops.key_column,
+            "label_columns": ops.label_columns,
+            "default_question": ops.default_question,
+            "records": records,
+        }
+
+    @app.post("/api/ops/brief")
+    def ops_brief(request: OpsBriefRequest) -> dict[str, Any]:
+        try:
+            return _run_ops_brief(request)
+        except OpsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.post("/api/reset")
     def reset(request: ResetRequest) -> dict[str, str]:
         # Drop the in-memory cache only; the saved chat stays in history.
@@ -290,6 +353,69 @@ def _run_chat(request: ChatRequest) -> dict[str, Any]:
     return _commit_chat_result(
         session_id, session, request.message, result, config_meta=_config_meta(request)
     )
+
+
+def _run_ops_brief(request: OpsBriefRequest, llm: Any = None) -> dict[str, Any]:
+    config = load_config(request.config_path)
+    ops = ops_config(config)
+    registry = DatabaseRegistry(config)
+
+    record = load_record(registry, config, request.record_id)
+    scope = build_record_scope(ops, record)
+    question = (request.question or ops.default_question).strip() or ops.default_question
+
+    # One model serves the investigation and the brief, so a model choice made on
+    # the screen applies to both halves of the run.
+    model = llm or _brief_model(request)
+    result = run_agent(
+        config,
+        question,
+        catalog=_load_optional_catalog(request.catalog_path),
+        schema_source=request.schema_source,
+        forced_database_ids=[ops.database_id],
+        record_scope=scope,
+        llm=model,
+        **_model_overrides(request.model_id),
+    )
+
+    plans = result.get("sql_plans", [])
+    evidence = build_evidence(result.get("query_results", []), plans)
+    text = (
+        synthesize_brief(model, question, scope.label, evidence)
+        if evidence
+        else "No evidence was gathered for this record, so there is nothing to report."
+    )
+    segments = brief_segments(text, evidence)
+
+    return {
+        "record": record_summary(ops, record, scope),
+        "question": question,
+        "scope": {
+            "label": scope.label,
+            "database_id": scope.database_id,
+            "bindings": scope.bindings,
+            "description": scope.describe(),
+        },
+        "brief": {
+            "text": "".join(
+                segment["text"] if segment["type"] == "text" else f"[{segment['evidence_id']}]"
+                for segment in segments
+            ),
+            "segments": segments,
+            "cited": cited_evidence_ids(segments),
+        },
+        "evidence": evidence,
+        "blocked_query_count": blocked_plans(plans),
+        "validation_errors": result.get("validation_errors", []),
+        "execution_errors": result.get("execution_errors", []),
+    }
+
+
+def _brief_model(request: OpsBriefRequest):
+    from db_agentic_system.llm import build_chat_model
+
+    overrides = _model_overrides(request.model_id)
+    return build_chat_model(overrides.get("provider"), overrides.get("model"))
 
 
 def _get_session(session_id: str) -> dict[str, Any]:

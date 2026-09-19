@@ -47,10 +47,16 @@ class DatabaseRegistry:
                 context[database_id] = self._schema_for_database(database_id, allowed)
         return context
 
-    def execute_readonly(self, database_id: str, sql: str) -> list[dict[str, Any]]:
+    def execute_readonly(
+        self,
+        database_id: str,
+        sql: str,
+        parameters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Run a validated SELECT. Values belong in ``parameters``, never in ``sql``."""
         engine = self.get_engine(database_id)
         with engine.connect() as connection:
-            result = connection.execute(text(sql))
+            result = connection.execute(text(sql), parameters or {})
             return [dict(row._mapping) for row in result.fetchall()]
 
     def _schema_for_database(

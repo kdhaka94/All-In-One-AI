@@ -20,6 +20,7 @@ from db_agentic_system.llm import (
     synthesize_context_answer,
 )
 from db_agentic_system.router import SemanticDatabaseRouter, build_embedder
+from db_agentic_system.scope import RecordScope
 from db_agentic_system.state import AgentState, QueryResult
 from db_agentic_system.table_selection import TableSelector
 
@@ -32,6 +33,7 @@ def build_graph(
     provider: str | None = None,
     model: str | None = None,
     embedding_model: str | None = None,
+    record_scope: RecordScope | None = None,
 ):
     if catalog is None and config.catalog_path:
         catalog = load_catalog(config.catalog_path)
@@ -156,6 +158,7 @@ def build_graph(
             state["question"],
             state["schema_context"],
             state.get("memory_context", ""),
+            record_scope=record_scope.describe() if record_scope else "",
         )
         return {"sql_plans": plans}
 
@@ -173,7 +176,9 @@ def build_graph(
             for plan in pending_plans:
                 database_id = plan["database_id"]
                 db_config = registry.get_config(database_id)
-                valid, reason, sql = validate_sql(plan["sql"], db_config, config.max_rows)
+                valid, reason, sql = validate_sql(
+                    plan["sql"], db_config, config.max_rows, record_scope=record_scope
+                )
                 sql_key = (database_id, " ".join(sql.lower().split()))
                 if sql_key in seen_sql:
                     continue
@@ -283,6 +288,11 @@ def build_graph(
                 return {"answer": answer}
             return {"answer": "The database does not contain enough information to answer that."}
 
+        if record_scope is not None:
+            # A record investigation turns these results into a cited brief, so a
+            # second narrative answer here would only be a wasted model call.
+            return {"answer": ""}
+
         answer = synthesize_answer(
             get_llm(),
             state["question"],
@@ -353,14 +363,18 @@ def run_agent(
     provider: str | None = None,
     model: str | None = None,
     embedding_model: str | None = None,
+    record_scope: RecordScope | None = None,
+    llm: BaseChatModel | None = None,
 ) -> AgentState:
     app = build_graph(
         config,
+        llm=llm,
         catalog=catalog,
         schema_source=schema_source,
         provider=provider,
         model=model,
         embedding_model=embedding_model,
+        record_scope=record_scope,
     )
     result = app.invoke(
         {

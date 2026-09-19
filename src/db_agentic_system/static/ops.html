@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Operations · Database Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (() => {
+        let storedTheme = null;
+        try {
+          const value = localStorage.getItem("db-agent-theme");
+          storedTheme = value === "dark" || value === "light" ? value : null;
+        } catch {
+          storedTheme = null;
+        }
+        const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.theme = storedTheme || (prefersDark ? "dark" : "light");
+      })();
+    </script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260919-ops" />
+  </head>
+  <body>
+    <main id="opsShell" class="ops-shell">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="brand topbar-brand">
+            <div class="mark">OP</div>
+            <div class="brand-text">
+              <h1>Operations</h1>
+              <p id="opsStatus" class="brand-status">Pick a record to investigate</p>
+            </div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a class="btn btn-secondary" href="/">Chat</a>
+          <button id="toggleTheme" class="icon-btn theme-toggle" type="button" title="Switch theme" aria-label="Switch theme">
+            <svg class="theme-icon theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+            <svg class="theme-icon theme-icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.99 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 20.99 12.79Z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <aside class="ops-picker">
+        <label class="field">
+          <span class="eyebrow">Profile</span>
+          <select id="opsProfile" class="field-select"></select>
+        </label>
+
+        <label class="field">
+          <span class="eyebrow">Find a record</span>
+          <input id="opsSearch" class="field-input" type="search" autocomplete="off" placeholder="Account number…" />
+        </label>
+
+        <div class="ops-record-list-head">
+          <span class="eyebrow">Records</span>
+          <span id="opsRecordCount" class="muted"></span>
+        </div>
+        <div id="opsRecords" class="ops-record-list">
+          <p class="muted">Loading records…</p>
+        </div>
+      </aside>
+
+      <section class="ops-main">
+        <div id="opsSelected" class="ops-selected empty">
+          <p class="muted">No record selected. Pick one on the left to scope the agent to it.</p>
+        </div>
+
+        <form id="opsForm" class="ops-question">
+          <input id="opsQuestion" class="field-input" type="text" autocomplete="off" placeholder="What should I look into?" />
+          <button id="opsRun" class="btn btn-primary" type="submit" disabled>Investigate</button>
+        </form>
+
+        <div id="opsBrief" class="ops-brief">
+          <p class="muted">The brief appears here. Every claim links to the query behind it.</p>
+        </div>
+      </section>
+
+      <aside class="ops-evidence-panel">
+        <div class="trace-header">
+          <span class="trace-title">Evidence</span>
+          <span id="opsEvidenceCount" class="trace-session">None yet</span>
+        </div>
+        <div id="opsEvidence" class="trace-body">
+          <p class="muted">Each query the agent ran, with the rows it returned.</p>
+        </div>
+      </aside>
+    </main>
+
+    <script src="/static/ops.js?v=20260919-ops"></script>
+  </body>
+</html>

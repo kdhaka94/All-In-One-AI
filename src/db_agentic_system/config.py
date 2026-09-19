@@ -41,8 +41,46 @@ class DatabaseConfig(BaseModel):
         return value
 
 
+class OpsConfig(BaseModel):
+    """Configures the operations screen: which record an investigation is scoped to.
+
+    The screen is record-first: an operator picks one record (a loan account, say)
+    and every query the agent runs must stay bound to it. That binding is expressed
+    here in schema terms rather than hard-coded, so the same screen works for any
+    core-banking schema.
+    """
+
+    database_id: str
+    # The table the operator picks a record from, e.g. m_loan.
+    table: str
+    key_column: str = "id"
+    # Columns shown for each record in the picker, first one as the headline.
+    label_columns: list[str] = Field(default_factory=list)
+    # Columns the picker's search box matches against.
+    search_columns: list[str] = Field(default_factory=list)
+    # Extra columns loaded for the selected record and shown on its card.
+    detail_columns: list[str] = Field(default_factory=list)
+    # Columns on OTHER tables that carry this record's key, e.g. m_loan_transaction.loan_id.
+    alias_columns: list[str] = Field(default_factory=list)
+    # Columns on the record's own row that point at another record, mapped to the
+    # table they reference: {"client_id": "m_client"} or {"client_id": "m_client.id"}.
+    related_columns: dict[str, str] = Field(default_factory=dict)
+    # Lookup tables a query may read without a record binding, e.g. enum decode tables.
+    reference_tables: list[str] = Field(default_factory=list)
+    # The investigation the screen runs when the operator does not type their own.
+    default_question: str = "Summarise this record and anything that needs attention."
+    page_size: int = 25
+
+    @model_validator(mode="after")
+    def require_label_columns(self) -> "OpsConfig":
+        if not self.label_columns:
+            raise ValueError("ops.label_columns must list at least one column")
+        return self
+
+
 class AgentConfig(BaseModel):
     databases: list[DatabaseConfig]
+    ops: OpsConfig | None = None
     max_selected_databases: int = 2
     min_route_score: float = 0.08
     max_rows: int = 100
@@ -59,6 +97,10 @@ class AgentConfig(BaseModel):
         ids = [db.id for db in self.databases]
         if len(ids) != len(set(ids)):
             raise ValueError("database ids must be unique")
+        if self.ops and self.ops.database_id not in ids:
+            raise ValueError(
+                f"ops.database_id {self.ops.database_id!r} is not a configured database"
+            )
         return self
 
 

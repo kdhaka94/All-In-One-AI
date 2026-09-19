@@ -153,6 +153,17 @@ def default_model_id() -> str | None:
     return options[0]["id"]
 
 
+def _scope_rule(record_scope: str) -> str:
+    """The planner-facing line that pins every generated query to one record."""
+    if not record_scope:
+        return ""
+    return (
+        "- RECORD SCOPE (mandatory): "
+        + record_scope
+        + " A query that is not filtered to that record will be rejected.\n"
+    )
+
+
 def contextualize_question(
     llm: BaseChatModel,
     question: str,
@@ -211,6 +222,7 @@ def generate_sql_plans(
     question: str,
     schema_context: dict[str, str],
     memory_context: str = "",
+    record_scope: str = "",
 ) -> list[SqlPlan]:
     schema_text = "\n\n---\n\n".join(schema_context.values())
     response = _invoke(llm,
@@ -219,6 +231,7 @@ def generate_sql_plans(
                 content=(
                     "You generate safe SQL plans for database-grounded question answering.\n"
                     "Rules:\n"
+                    + _scope_rule(record_scope) +
                     "- Return only valid JSON. Do not use markdown, comments, trailing commas, "
                     "or unquoted object keys.\n"
                     "- Generate one or more SELECT queries per relevant database when the question "
@@ -277,6 +290,7 @@ def generate_followup_sql_plans(
     memory_context: str,
     executed_plans: list[SqlPlan],
     query_results: list[QueryResult],
+    record_scope: str = "",
 ) -> list[SqlPlan]:
     schema_text = "\n\n---\n\n".join(schema_context.values())
     response = _invoke(llm,
@@ -285,6 +299,7 @@ def generate_followup_sql_plans(
                 content=(
                     "You decide whether more safe SQL is needed to answer a database question.\n"
                     "Rules:\n"
+                    + _scope_rule(record_scope) +
                     "- Return only valid JSON. Do not use markdown, comments, trailing commas, "
                     "or unquoted object keys.\n"
                     "- If the existing query results are enough to answer the question, return an "
@@ -440,6 +455,50 @@ def synthesize_answer(
                     f"Standalone database question:\n{question}\n\n"
                     f"Query results JSON:\n{json.dumps(results, default=str)}\n\n"
                     f"Validation errors:\n{json.dumps(validation_errors)}"
+                )
+            ),
+        ]
+    )
+    return _content_to_text(response.content)
+
+
+def synthesize_brief(
+    llm: BaseChatModel,
+    question: str,
+    record_label: str,
+    evidence: list[dict[str, Any]],
+) -> str:
+    """Write an operations brief about one record, citing the evidence behind each claim.
+
+    Every claim has to carry a ``[e1]`` marker naming the query it came from, so
+    the screen can turn each one into a link back to the SQL and rows that support
+    it. An uncited brief is just prose: the citation is the point.
+    """
+    response = _invoke(llm,
+        [
+            SystemMessage(
+                content=(
+                    "You write short operations briefs about ONE record for a banking "
+                    "operations team.\n"
+                    "Use ONLY the numbered evidence provided. Do not use outside knowledge and "
+                    "do not invent numbers, dates, names, statuses, or totals.\n"
+                    "Cite evidence inline with its marker in square brackets, for example "
+                    "[e1]. Every factual claim must carry at least one citation, placed "
+                    "immediately after the claim.\n"
+                    "Only cite markers that appear in the evidence list.\n"
+                    "Structure the brief as a one-paragraph summary followed by short bullet "
+                    "lines for anything that needs attention. Keep it under 200 words.\n"
+                    "Write plain business language. Never show raw column names or raw enum "
+                    "integer codes; translate them or leave them out.\n"
+                    "If the evidence is empty or does not support a conclusion, say plainly "
+                    "that there is not enough evidence about this record, and cite nothing."
+                )
+            ),
+            HumanMessage(
+                content=(
+                    f"Record under investigation:\n{record_label}\n\n"
+                    f"Investigation question:\n{question}\n\n"
+                    f"Evidence JSON:\n{json.dumps(evidence, default=str)}"
                 )
             ),
         ]

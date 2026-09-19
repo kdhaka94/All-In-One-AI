@@ -1019,3 +1019,312 @@ html[data-theme="dark"] .theme-icon-sun {
   color: var(--danger);
   background: var(--danger-bg);
 }
+
+/* ================= OPERATIONS SCREEN ================= */
+
+.ops-shell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 420px;
+  grid-template-rows: 58px minmax(0, 1fr);
+  grid-template-areas:
+    "topbar topbar topbar"
+    "picker main evidence";
+  height: 100vh;
+  width: 100%;
+  background: var(--bg);
+}
+
+.ops-picker {
+  grid-area: picker;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 28px 24px;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.ops-record-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.ops-record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.ops-record {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ops-record:hover {
+  border-color: var(--border-hover);
+}
+
+.ops-record.is-selected {
+  border-color: var(--accent);
+  background: var(--pill-bg);
+}
+
+.ops-record-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ops-record-meta {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--muted-1);
+}
+
+.ops-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 32px;
+  overflow-y: auto;
+  min-width: 0;
+  background: var(--bg-chat);
+}
+
+.ops-selected {
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card-bg);
+  box-shadow: var(--surface-shadow);
+}
+
+.ops-selected.empty {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ops-selected-title {
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.ops-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px 18px;
+}
+
+.ops-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ops-field-value {
+  font-size: 14px;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.ops-scope-note {
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+  color: var(--muted-4);
+}
+
+.ops-question {
+  display: flex;
+  gap: 10px;
+}
+
+/* .field-input and .btn are both full-width by default, so the row has to say
+   which one takes the leftover space. */
+.ops-question .field-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.ops-question .btn {
+  flex: 0 0 auto;
+  width: auto;
+  padding-inline: 22px;
+}
+
+.ops-brief {
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card-bg);
+  box-shadow: var(--surface-shadow);
+}
+
+.ops-brief-head {
+  margin-bottom: 12px;
+}
+
+.ops-brief-body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--text-soft);
+  white-space: pre-wrap;
+}
+
+.ops-cite {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 2px;
+  padding: 1px 7px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.ops-cite:hover {
+  background: var(--accent);
+  color: var(--btn-primary-text);
+}
+
+.ops-brief-warning {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.ops-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.ops-evidence-panel {
+  grid-area: evidence;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.ops-evidence {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  transition: border-color 0.2s ease;
+}
+
+.ops-evidence.is-focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--pill-bg);
+}
+
+.ops-evidence-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ops-evidence-id {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--btn-primary-text);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+
+.ops-evidence-purpose {
+  font-size: 13px;
+  color: var(--muted-4);
+  white-space: normal;
+}
+
+.ops-evidence-sql {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--code-bg);
+  color: var(--code-text);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.ops-evidence-rows {
+  overflow-x: auto;
+}
+
+.ops-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ops-table th,
+.ops-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ops-table th {
+  color: var(--muted-1);
+  font-weight: 500;
+  text-transform: none;
+}
+
+@media (max-width: 1100px) {
+  .ops-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 58px auto auto auto;
+    grid-template-areas:
+      "topbar"
+      "picker"
+      "main"
+      "evidence";
+    height: auto;
+  }
+
+  .ops-picker,
+  .ops-evidence-panel {
+    border-right: 0;
+    border-left: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}

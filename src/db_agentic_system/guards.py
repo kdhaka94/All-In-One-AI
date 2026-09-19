@@ -7,6 +7,7 @@ from sqlglot import exp
 
 from db_agentic_system.config import DatabaseConfig
 from db_agentic_system.policy import is_sensitive_column_name, is_sensitive_question
+from db_agentic_system.scope import RecordScope, scope_violation
 
 
 BLOCKED_SQL_PATTERNS = re.compile(
@@ -20,7 +21,12 @@ def check_question_policy(question: str) -> tuple[bool, str | None]:
     return True, None
 
 
-def validate_sql(sql: str, db_config: DatabaseConfig, max_rows: int) -> tuple[bool, str | None, str]:
+def validate_sql(
+    sql: str,
+    db_config: DatabaseConfig,
+    max_rows: int,
+    record_scope: RecordScope | None = None,
+) -> tuple[bool, str | None, str]:
     cleaned = sql.strip().rstrip(";")
     if not cleaned:
         return False, "SQL is empty.", cleaned
@@ -58,6 +64,13 @@ def validate_sql(sql: str, db_config: DatabaseConfig, max_rows: int) -> tuple[bo
         disallowed = sorted(used_tables - allowed_tables)
         if disallowed:
             return False, f"Query uses disallowed tables: {', '.join(disallowed)}.", cleaned
+
+    # An investigation pinned to one record only stays pinned if the binding is
+    # enforced here, alongside the read-only guarantees.
+    if record_scope is not None:
+        violation = scope_violation(parsed, record_scope)
+        if violation:
+            return False, violation, cleaned
 
     limited = _ensure_limit(cleaned, parsed, max_rows, db_config.dialect)
     return True, None, limited

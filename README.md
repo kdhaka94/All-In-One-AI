@@ -205,6 +205,29 @@ The right panel shows the trace for the latest answer:
 
 While a request is running, the right panel streams progress steps so the UI does not look stuck.
 
+## Operations screen
+
+[http://127.0.0.1:8000/ops](http://127.0.0.1:8000/ops) investigates one record at a
+time instead of chatting across the whole database. An operator picks a loan
+account, and from then on every query the agent runs is pinned to that account.
+
+The pinning is enforced, not just requested. The planner is told which record it
+is on, and `validate_sql` rejects any query that is not filtered to it, alongside
+the usual read-only and blocked-column rules. A query that reads the whole table,
+or a different loan, never reaches the database; the screen reports it as blocked.
+
+What comes back is a brief whose every claim carries a citation. Each query that
+ran is numbered (`e1`, `e2`, …) and shown in the evidence panel with its SQL and
+rows, and each citation in the brief is a link to the query behind it. A citation
+that does not match a query that actually ran is dropped rather than shown.
+
+Which record the screen works on is configuration, not code. The `ops:` section of
+a config file names the table to pick from, the columns to search and show, and
+the columns that bind a query to the selected record — see the `ops:` block in
+[config/fineract.example.yaml](config/fineract.example.yaml). A config that has no
+`ops:` section has no operations screen. To point the screen at a profile that is
+not in its list, pass it in the URL: `/ops?config=config/my.yaml`.
+
 ## Production notes
 
 - Put the database user in read-only mode at the database permission level.
