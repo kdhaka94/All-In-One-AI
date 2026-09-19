@@ -1,18 +1,22 @@
 # Running the banking operations screen locally
 
-The "banking operations screen" is the agent's web UI (`db-agent-ui`) driven by one of
-the two banking config profiles: **Bank Config** (`config/bank.example.yaml`, a local
-SQLite retail-bank database) or **Fineract Core Banking**
-(`config/fineract.example.yaml`, a live Apache Fineract Postgres schema).
+`db-agent-ui` serves two screens, both driven by the banking config profiles: **Bank
+Config** (`config/bank.example.yaml`, a local SQLite retail-bank database) and
+**Fineract Core Banking** (`config/fineract.example.yaml`, a live Apache Fineract
+Postgres schema).
 
-Two things to know before you start, because the naming is misleading:
+- **`/` is the chat screen.** Ask a question, the agent routes it to a database and
+  answers it, with the trace in the right panel. Most of this guide is about getting
+  this one running; everything it covers applies to both screens.
+- **`/ops` is the operations screen.** Pick one loan account and investigate just that
+  record: every query the run makes is pinned to it, and the brief that comes back links
+  each claim to the query behind it. It needs a profile with an `ops:` section, which is
+  [§6](#6-the-operations-screen) below.
 
-- **The screen is served at `/`, not `/ops`.** `GET /ops` returns 404. The only routes
-  are `/`, `/static/*` and the `/api/*` endpoints (`src/db_agentic_system/web.py`).
-- **`8123` is not the default port.** `db-agent-ui` binds `127.0.0.1:8000` unless
-  `DB_AGENT_UI_PORT` says otherwise (`web.py:main`). Port 8123 comes from
-  `.claude/launch.json`, which sets `DB_AGENT_UI_PORT=8123` for the `db-agent-ui`
-  launch configuration. Steps below use 8123 to match it.
+One thing to know before you start: **`8123` is not the default port.** `db-agent-ui`
+binds `127.0.0.1:8000` unless `DB_AGENT_UI_PORT` says otherwise (`web.py:main`). Port
+8123 comes from `.claude/launch.json`, which sets `DB_AGENT_UI_PORT=8123` for the
+`db-agent-ui` launch configuration. Steps below use 8123 to match it.
 
 ---
 
@@ -139,10 +143,12 @@ reports:
 INFO:     Uvicorn running on http://127.0.0.1:8123 (Press CTRL+C to quit)
 ```
 
-Open **<http://127.0.0.1:8123>** — the root path, not `/ops`.
+Open **<http://127.0.0.1:8123>** for the chat screen, or
+**<http://127.0.0.1:8123/ops>** for the operations screen.
 
-In the sidebar: pick a **Config Profile** (`Bank Config · Learned catalog` for SQLite,
-`Fineract Core Banking · Learned catalog` for the Docker stack), optionally pin a
+In the chat screen's sidebar: pick a **Config Profile** (`Bank Config · Learned
+catalog` for SQLite, `Fineract Core Banking · Learned catalog` for the Docker stack),
+optionally pin a
 **Database** instead of auto-routing, pick an **AI Model**, and ask a question. The right
 panel streams the trace: standalone question, selected database, generated SQL,
 validation errors and a result preview.
@@ -179,11 +185,51 @@ curl -s -X POST http://127.0.0.1:8123/api/chat \
        "schema_source":"learned"}'
 ```
 
+## 6. The operations screen
+
+`/ops` investigates one record at a time instead of chatting across the whole database.
+It needs everything above — an API key, a reachable database, an indexed catalog for a
+profile that declares one — plus one more thing: an `ops:` section in the config file,
+naming the table to pick a record from, the columns to search and show, and the columns
+that bind a query to the selected record.
+
+Of the profiles in the repo only `config/fineract.example.yaml` has one, so the screen
+works against the Fineract stack out of the box and shows
+`This profile has no ops section, so it has no record to investigate.` for the others.
+Its profile dropdown is a hardcoded list in `src/db_agentic_system/static/ops.js`, like
+the chat screen's; to use a config that is not in it, name the file in the URL:
+
+```text
+http://127.0.0.1:8123/ops?config=config/my-bank.yaml
+```
+
+Pick a loan on the left and press **Investigate**. Two endpoints back the screen, and
+both work from the command line:
+
+```bash
+curl -s -X POST http://127.0.0.1:8123/api/ops/records \
+  -H 'Content-Type: application/json' \
+  -d '{"config_path":"config/fineract.example.yaml","search":"000042"}'
+
+curl -s -X POST http://127.0.0.1:8123/api/ops/brief \
+  -H 'Content-Type: application/json' \
+  -d '{"record_id":"42","config_path":"config/fineract.example.yaml",
+       "catalog_path":"config/fineract_catalog.json","schema_source":"learned"}'
+```
+
+The record list needs no API key; the brief does, since it runs the agent.
+
+A query the run makes that is not filtered to the selected loan is rejected before it
+reaches the database, and the screen reports it under the brief as blocked by access
+policy. That is the scope working, not an error — see the `ops:` block in
+`config/fineract.example.yaml` for which columns count as a binding.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `404` at `/ops` | The screen is served at `/` | Open `http://127.0.0.1:8123/` |
+| `This profile has no ops section` at `/ops` | The selected profile has no `ops:` block | Pick the Fineract profile, or add an `ops:` section to your config |
+| A brief says a query was blocked by access policy | The agent planned a query that left the selected loan | Expected — the scope is enforced; ask a narrower question if the brief is thin |
 | Server comes up on 8000 | `DB_AGENT_UI_PORT` unset | Set it to `8123` in the shell or `.env` |
 | `Catalog not found: config/bank_catalog.json` | Catalog never built | `db-agent index …`, or the **Index Catalog** button |
 | `environment variable 'DATABASE_URL_BANK' is not set` | Bank profile without its URL | Set it in `.env` to your local SQLite path |
