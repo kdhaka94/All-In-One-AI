@@ -58,6 +58,7 @@ model credentials and the server settings — you do not need to export anything
 | `DB_AGENT_UI_HOST` | no | Defaults to `127.0.0.1`. |
 | `DB_AGENT_UI_PORT` | no | Defaults to `8000`; set `8123` to match `.claude/launch.json`. |
 | `DB_AGENT_SESSIONS_DB` | no | Defaults to `db/agent_sessions.db`. |
+| `DATABASE_URL_BANK` | only for the Bank profiles | `config/bank.example.yaml` reads it via `uri_env`. |
 | `DATABASE_URL_FINERACT` | only for the Fineract profile | `config/fineract.example.yaml` reads it via `uri_env`. |
 
 **The API key is not optional in practice.** Without one, the screen still loads and the
@@ -76,19 +77,21 @@ not executed by anything and you do not need to run it.
 
 ### The banking data: this is the part that needs work
 
-**Bank Config** (`config/bank.example.yaml`) ships with a hardcoded absolute `uri:`
-pointing at one developer's machine:
+**Bank Config** (`config/bank.example.yaml`) reads its database URL from the
+environment, so point `DATABASE_URL_BANK` at your own copy of the retail-bank SQLite
+file:
 
-```yaml
-uri: sqlite:////Users/kuldeepdhaka/Downloads/banking_dataset_kaggle/data/database/bank_sqlite.db
+```bash
+DATABASE_URL_BANK=sqlite:////absolute/path/to/bank_sqlite.db
 ```
 
-On any other machine, indexing it fails with
-`(sqlite3.OperationalError) unable to open database file`. Edit that line to point at
-your own copy of the retail-bank SQLite file before going further. Edit
-`bank.example.yaml` itself rather than making a new config file: the profile dropdown is
-a hardcoded list in `src/db_agentic_system/static/app.js` (`DATA_PROFILES`), so a new
-YAML file will not appear in the UI without editing that list too.
+Four slashes after `sqlite:` for an absolute path, three for a path relative to the
+working directory. Leave it unset and indexing stops with
+`environment variable 'DATABASE_URL_BANK' is not set`.
+
+If you would rather add a config of your own than reuse this one, note that the profile
+dropdown is a hardcoded list in `src/db_agentic_system/static/app.js` (`DATA_PROFILES`) —
+a new YAML file will not appear in the UI without an entry there.
 
 **Then build the catalog**, because both bank profiles need one and it is not in the
 repo — `config/*_catalog.json` is gitignored:
@@ -100,17 +103,22 @@ db-agent index --config config/bank.example.yaml --output config/bank_catalog.js
 Indexing needs no API key unless you add `--annotate`. You can do the same thing from the
 screen with the **Index Catalog** button.
 
-Skipping this step is the most common failure, and the UI does not warn you: both bank
-entries in `DATA_PROFILES` are marked `catalogReady: true`, so neither shows the
-"(catalog missing)" suffix. Instead the first question fails with:
+Skipping this step is the most common failure. The sidebar flags it: an unindexed profile
+reads "(catalog missing)" in the dropdown and `catalog missing — press Index Catalog` in
+the line under it. The state is read from the server on every profile switch, so it
+reflects the files actually on disk. Asking anyway returns:
 
 ```json
-{"detail":"[Errno 2] No such file or directory: 'config/bank_catalog.json'"}
+{"detail":"Catalog not found: config/bank_catalog.json. Learn it first with
+`db-agent index --config <config> --output config/bank_catalog.json`, or press
+Index Catalog in the web UI."}
 ```
 
-This happens on the **Live schema** profile too, not just **Learned catalog**:
-`bank.example.yaml` declares `catalog_path`, and `build_graph` loads that path
-unconditionally when no catalog was passed in (`graph.py:36-37`).
+This applies to the **Live schema** profile too, not just **Learned catalog**:
+`bank.example.yaml` declares `catalog_path`, and `build_graph` requires that file
+whenever no catalog was passed in (`graph.py:36`). Falling back to live schema there
+would skip table selection and push every table into the prompt, which is why it stops
+instead.
 
 **Fineract Core Banking** needs the Docker stack instead — Postgres on host port 5433,
 a seeded dataset, and the read-only `agent_ro` role. That runbook is
@@ -177,8 +185,8 @@ curl -s -X POST http://127.0.0.1:8123/api/chat \
 | --- | --- | --- |
 | `404` at `/ops` | The screen is served at `/` | Open `http://127.0.0.1:8123/` |
 | Server comes up on 8000 | `DB_AGENT_UI_PORT` unset | Set it to `8123` in the shell or `.env` |
-| `No such file or directory: 'config/bank_catalog.json'` | Catalog never built | `db-agent index …`, or the **Index Catalog** button |
-| `unable to open database file` when indexing | `uri:` in `bank.example.yaml` points at another machine | Edit it to your local SQLite path |
+| `Catalog not found: config/bank_catalog.json` | Catalog never built | `db-agent index …`, or the **Index Catalog** button |
+| `environment variable 'DATABASE_URL_BANK' is not set` | Bank profile without its URL | Set it in `.env` to your local SQLite path |
 | `Missing Gemini credentials` | No API key | Set `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) in `.env` |
 | AI Model dropdown empty | Same — `/api/models` only lists providers with a key | Same |
 | `environment variable 'DATABASE_URL_FINERACT' is not set` | Fineract profile without its URL | Set it in `.env`; see `fineract/README.md` |

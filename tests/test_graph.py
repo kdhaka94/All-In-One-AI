@@ -210,3 +210,34 @@ def test_agent_answers_context_reasoning_question_when_no_sql_is_needed(
     assert result["query_results"] == []
     assert "inferential estimate" in result["answer"]
     assert "90%" in result["answer"]
+
+
+def test_missing_catalog_file_raises_an_actionable_error(tmp_path: Path) -> None:
+    """A config naming a catalog that was never learned should say how to learn it.
+
+    The catalogs are gitignored, so a fresh checkout hits this on its first question;
+    the raw FileNotFoundError ("[Errno 2] ...") gave no hint about `db-agent index`.
+    """
+    missing_catalog = tmp_path / "bank_catalog.json"
+    config = AgentConfig(
+        catalog_path=str(missing_catalog),
+        databases=[
+            DatabaseConfig(
+                id="bank",
+                name="Retail Bank",
+                description="Accounts and balances.",
+                uri=f"sqlite:///{tmp_path / 'bank.db'}",
+                dialect="sqlite",
+            )
+        ],
+    )
+
+    try:
+        build_graph(config, llm=FakeChatModel(responses=[]))
+    except ValueError as error:
+        message = str(error)
+        assert str(missing_catalog) in message
+        assert "db-agent index" in message
+        assert "Index Catalog" in message
+    else:  # pragma: no cover - the guard is the point of the test
+        raise AssertionError("build_graph should refuse a catalog path that does not exist")
