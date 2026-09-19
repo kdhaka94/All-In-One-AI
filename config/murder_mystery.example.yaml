@@ -8,7 +8,7 @@ databases:
   - id: mystery_example
     name: SQL Mystery Example
     description: Example SQLite database for testing generic database learning, routing, and grounded SQL question answering.
-    uri: sqlite:////Users/kuldeepdhaka/Downloads/sql-murder-mystery.db
+    uri_env: DATABASE_URL_MYSTERY
     dialect: sqlite
     include_tables: []
     blocked_tables:
@@ -20,7 +20,7 @@ databases:
   - id: chinook
     name: Chinook Music Store
     description: Sample SQLite music store database with artists, albums, tracks, playlists, genres, media types, customers, employees, invoices, and invoice line sales.
-    uri: sqlite:////Users/kuldeepdhaka/Downloads/Chinook_Sqlite.sqlite
+    uri_env: DATABASE_URL_CHINOOK
     dialect: sqlite
     include_tables: []
     blocked_tables: []
